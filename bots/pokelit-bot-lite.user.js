@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot Lite
 // @namespace    local.pokelit.bot.lite
-// @version      0.9.19
+// @version      0.9.20
 // @description  Bản rút gọn: bot chơi + mở hòm, không báo cáo. Chỉ bật một trong hai bản (Bot hoặc Bot Lite).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.19 Lite';
+  const VERSION = '0.9.20 Lite';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -651,7 +651,7 @@
     const t = ctx.titan; if (!t || !t.nova || !t.nova.safe || t.nova.left > 6) return null;
     const me = ctx.me, dx = t.nova.x - me.x, dy = t.nova.y - me.y, d = Math.hypot(dx, dy);
     if (d < 35) return { v: [0, 0], mode: 'đứng trong vòng an toàn' };
-    // v0.9.19: chọn hướng chạy tới vòng an toàn nhưng tránh tia / vòng nổ đang báo trước và tường trong 0.75s tới
+    // v0.9.20: chọn hướng chạy tới vòng an toàn nhưng tránh tia / vòng nổ đang báo trước và tường trong 0.75s tới
     const spd = Math.max(40, me.baseSpd || me.spd || 90);
     let best = [dx / d, dy / d], bs = Infinity;
     for (let k = 0; k < 24; k++) {
@@ -1148,7 +1148,7 @@
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
     let found = null, iterations = 0, bestN = start, bestH = start.f + 1e-6 + (trail.get(trailKey(sx * cell + 16, sy * cell + 16))?.n ? Math.min(30, trail.get(trailKey(sx * cell + 16, sy * cell + 16)).n) * 3 : 0);
 
-    const maxIt = goal.mode === 'tới hòm' || goal.mode === 'rương' ? 1100 : 500;   // v0.9.19: đường tới hòm được tìm sâu hơn (mục tiêu khác giữ 500)
+    const maxIt = goal.mode === 'tới hòm' || goal.mode === 'rương' ? 1100 : 500;   // v0.9.20: đường tới hòm được tìm sâu hơn (mục tiêu khác giữ 500)
     while (heap.length && iterations < maxIt) {
       const cur = pop();
       if (cur.g > (costs.get(K(cur.x, cur.y)) ?? Infinity) + 1e-9) continue; // mục cũ đã có đường tốt hơn
@@ -1780,12 +1780,12 @@
     const now = Date.now(), me = ctx.me;
     const playing = state.enabled && W.__PL?.Game?.state === 'playing';
     forcedGoal = null;   // v0.9.12: biến cấp module (think0 dùng chung) — mở hòm bất chấp
-    // v0.9.19: tắt "Boss phán xét (phút 30)" mà game đã kéo vào Judgment → đứng im cho tới khi thua (kết thúc ván). Bật thì chơi bình thường.
+    // v0.9.20: tắt "Boss phán xét (phút 30)" mà game đã kéo vào Judgment → đứng im cho tới khi thua (kết thúc ván). Bật thì chơi bình thường.
     if (playing && !state.judgeMode && safe(() => !!W.__PL.Judgment?.active, false)) {
       botMode = 'đứng im (tắt Boss phán xét)'; us.lastMag = 0; us.hist = []; us.until = 0;
       return [0, 0];
     }
-    // v0.9.19: ghi nhật ký Titan (đổi pha, NOVA có/không vòng an toàn, bot có đứng trong vòng lúc nổ không)
+    // v0.9.20: ghi nhật ký Titan (đổi pha, NOVA có/không vòng an toàn, bot có đứng trong vòng lúc nổ không)
     try {
       const T = state.titanMode ? ctx.titan : null;
       const bh = T && T.boss && T.boss.maxHp > 0 ? Math.round(100 * T.boss.hp / T.boss.maxHp) : 0, myhp = me && me.maxHp > 0 ? Math.round(100 * me.hp / me.maxHp) : 0;
@@ -1797,7 +1797,7 @@
         if (T.enrage && !us.enrageLogged) { us.enrageLogged = true; W.__PLH_RUN_LOG?.recordTitan?.({ e: 'cuồng nộ (quá 360s)', ph: T.phase, bh, hp: myhp }); }
       } else { us.titanPh = -1; us.nova = null; us.enrageLogged = false; }
     } catch (_) {}
-    // v0.9.19: Titan cuồng nộ (quá 360s): không còn vòng an toàn, không đủ điều kiện hạ → lao vào Titan để bị hạ gục. KHÔNG dùng hàm rời của game (sợ tính là bỏ cả ván).
+    // v0.9.20: Titan cuồng nộ (quá 360s): không còn vòng an toàn, không đủ điều kiện hạ → lao vào Titan để bị hạ gục. KHÔNG dùng hàm rời của game (sợ tính là bỏ cả ván).
     if (playing && state.titanMode && ctx.titan && !ctx.titan.portal && ctx.titan.enrage) {
       const T = ctx.titan, bx = T.boss ? T.boss.x : T.cx, by = T.boss ? T.boss.y : T.cy, dx = bx - me.x, dy = by - me.y, dd = Math.hypot(dx, dy);
       botMode = 'tự thua (Titan cuồng nộ)'; us.lastMag = 1; us.hist = []; us.until = 0;
@@ -1825,7 +1825,7 @@
               }
             }
           }
-          // v0.9.19: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
+          // v0.9.20: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
           if (!ctx.inArena && ctx.titan && ctx.titan.portal && Number.isFinite(ctx.titan.portal.x)) {
             const tp = ctx.titan.portal, td = dist(me, tp);
             riftRush = true;
@@ -1855,7 +1855,7 @@
         }
         if (hz) { botMode = 'né vùng'; us.lastMag = 1; us.gc.key = ''; return hz; }
         if (now < us.until) { botMode = 'thoát kẹt'; us.lastMag = 1; us.gc.key = ''; return us.vec; }
-        // v0.9.19: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
+        // v0.9.20: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
         {
           const gm0 = goalState.mode, gk0 = String(goalState.key || '').split('#')[0];
           if ((gm0 === 'tới hòm' || gm0 === 'rương') && goalState.goal && us.lastMag < 0.05) {
@@ -3119,7 +3119,7 @@
     addBtn(itemBtns, 'Chọn tất cả', () => { state.itemWant = [...SHOP_ORDER]; itemChecks.forEach(([, c]) => { c.checked = true; }); persistSettings(); });
     addBtn(itemBtns, 'Bỏ chọn hết', () => { state.itemWant = []; itemChecks.forEach(([, c]) => { c.checked = false; }); persistSettings(); });
 
-    // v0.9.19: Tự roll gacha — bấm đúng các nút của game (pull-100 vé vàng ×100, pull-10b vé tím ×10, rồi lẻ ×10/×1) cho tới hết vé. Không sửa vé, không đổi cài đặt game.
+    // v0.9.20: Tự roll gacha — bấm đúng các nút của game (pull-100 vé vàng ×100, pull-10b vé tím ×10, rồi lẻ ×10/×1) cho tới hết vé. Không sửa vé, không đổi cài đặt game.
     const gG = group('Gacha tự động', false);
     const gx = { on: false, clicks: 0, msg: 'Mở màn Gacha, chọn banner rồi bấm Bắt đầu.' };
     const gsleep = ms => new Promise(r => setTimeout(r, ms));
@@ -3148,10 +3148,12 @@
         if (gvis(fx)) {   // đang có hiệu ứng / bảng kết quả: bấm Skip của game, lật các thẻ úp, rồi bấm "Tiếp tục"
           const close = gel('pull-close');
           if (gvis(close)) { close.click(); await gsleep(500); sigPrev = ''; continue; }
+          const flip = [...document.querySelectorAll('button, [role="button"], .btn')].find(b => gvis(b) && /flip\s*all|lật\s*(hết|tất\s*cả)/i.test(b.textContent || ''));   // nút "Flip all" của game
+          if (flip) { flip.click(); await gsleep(350); }
           const sk = [...fx.querySelectorAll('.summon-skip')].find(gvis); if (sk) sk.click();
           const down = [...fx.querySelectorAll('.pcard.down')]; for (const c of down) { if (!gx.on) return; c.click(); await gsleep(40); }
-          const sig = down.length + '|' + fx.querySelectorAll('.pcard').length + '|' + !!sk;
-          if (sig !== sigPrev) { sigPrev = sig; sigAt = Date.now(); } else if (Date.now() - sigAt > 25000) return gStop('Đã dừng: bảng kết quả đứng yên 25s — hãy xem màn hình (có thể cần bấm gì đó)');
+          const sig = down.length + '|' + fx.querySelectorAll('.pcard').length + '|' + !!sk + '|' + !!flip;
+          if (sig !== sigPrev) { sigPrev = sig; sigAt = Date.now(); } else if (Date.now() - sigAt > 25000) return gStop('Đã dừng: bảng kết quả đứng yên 25s. Nút đang hiện: ' + ([...document.querySelectorAll('button')].filter(gvis).map(b => (b.textContent || '').trim().replace(/\s+/g, ' ')).filter(Boolean).slice(0, 10).join(' | ') || '(không thấy nút)') + ' — gửi tôi dòng này');
           await gsleep(250); continue;
         }
         sigPrev = ''; sigAt = Date.now();
