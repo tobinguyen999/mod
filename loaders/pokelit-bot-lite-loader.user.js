@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot Lite (tự cập nhật)
 // @namespace    local.pokelit.bot.lite.autoupdate
-// @version      1.0.1
+// @version      1.0.2
 // @description  Bộ nạp: mỗi lần F5 tự dùng bản bot mới nhất từ kho GitHub (có bản lưu dự phòng khi mất mạng).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -49,6 +49,8 @@
   let cached = '';
   try { cached = GM_getValue(KEY, ''); } catch (_) {}
   if (valid(cached)) run(cached);   // chạy ngay bản đã lưu, không chờ mạng
+  try { console.log('[Bộ nạp bot 1.0.2] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
+  note('đã chạy (1.0.2) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
   const t0 = performance.now();
   GM_xmlhttpRequest({
     method: 'GET', url: BASE + FILE + '?t=' + Date.now(), timeout: 15000, headers: { 'Cache-Control': 'no-cache' },
@@ -58,6 +60,7 @@
         if (r.status !== 200 || !valid(txt)) { if (!valid(cached)) note('GitHub trả mã ' + r.status + ' hoặc file lỗi.', 20000); return; }
         if (txt === cached) return;
         GM_setValue(KEY, txt);
+        try { console.log('[Bộ nạp bot] đã tải bản mới', Math.round(txt.length / 1024) + ' KB'); } catch (_) {}
         // Chỉ nạp lại ngay nếu tải xong trong vài giây đầu (chưa vào ván); nếu chậm thì bản mới dùng ở lần F5 sau để không mất ván đang chơi.
         let recent = false; try { recent = Date.now() - Number(sessionStorage.getItem(GUARD) || 0) < 30000; } catch (_) {}
         if (performance.now() - t0 < 5000 && !recent) { try { sessionStorage.setItem(GUARD, String(Date.now())); } catch (_) {} location.reload(); }
