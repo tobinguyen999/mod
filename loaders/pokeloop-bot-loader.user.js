@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Full (tự cập nhật)
 // @namespace    local.pokeloop.bot.full.autoupdate
-// @version      1.0.5
+// @version      1.0.6
 // @description  Bộ nạp: mỗi lần F5 tự dùng bản bot mới nhất từ kho GitHub (có bản lưu dự phòng khi mất mạng).
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -51,22 +51,25 @@
     const onViol = e => { if (/script/.test(e.effectiveDirective || '') && (e.blockedURI === 'inline' || !e.blockedURI)) { blocked = true; removeEventListener('securitypolicyviolation', onViol, true); runBlob(code); } };
     addEventListener('securitypolicyviolation', onViol, true);
     const s = document.createElement('script');
+    try { const n = document.querySelector('script[nonce]'); if (n) s.setAttribute('nonce', n.nonce || n.getAttribute('nonce')); } catch (_) {}
     s.textContent = PRE + code + '\n//# sourceURL=bot-' + FILE;
     const put = () => { const root = document.head || document.documentElement; if (!root) return false; root.appendChild(s); s.remove(); return true; };
     if (!put()) { const mo = new MutationObserver(() => { if (put()) mo.disconnect(); }); mo.observe(document, { childList: true }); }
     setTimeout(() => removeEventListener('securitypolicyviolation', onViol, true), 3000);
   };
+  const seen = [];
+  try { addEventListener('securitypolicyviolation', e => { seen.push((e.effectiveDirective || '?') + '←' + String(e.blockedURI || '').slice(0, 40)); }, true); } catch (_) {}
   let cached = '';
   try { cached = GM_getValue(KEY, ''); } catch (_) {}
   if (valid(cached)) run(cached);   // chạy ngay bản đã lưu, không chờ mạng
-  try { console.log('[Bộ nạp bot 1.0.5] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
-  note('đã chạy (1.0.5) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
+  try { console.log('[Bộ nạp bot 1.0.6] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
+  note('đã chạy (1.0.6) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
   // Chẩn đoán: báo CSP chặn gì và bot đã khởi động trong trang chưa
   try {
     const viol = e => note('CSP chặn: ' + (e.effectiveDirective || '?') + ' ← ' + String(e.blockedURI || '').slice(0, 60), 30000);
     addEventListener('securitypolicyviolation', viol, true);
     setTimeout(() => removeEventListener('securitypolicyviolation', viol, true), 15000);
-    const report = tag => { const r = document.documentElement; note(tag + ': mã bot ' + (r.getAttribute('data-plh-injected') ? 'ĐÃ chạy trong trang' : 'CHƯA chạy trong trang') + (r.getAttribute('data-plh-error') ? ' · lỗi: ' + r.getAttribute('data-plh-error') : '') + (document.getElementById('plh-panel') ? ' · bảng điều khiển ✓' : ' · chưa có bảng điều khiển'), 25000); };
+    const report = tag => { const r = document.documentElement; note('v1.0.6 ' + tag + ': mã bot ' + (r.getAttribute('data-plh-injected') ? 'ĐÃ chạy trong trang' : 'CHƯA chạy') + (r.getAttribute('data-plh-error') ? ' · lỗi: ' + r.getAttribute('data-plh-error') : '') + (document.getElementById('plh-panel') ? ' · bảng ✓' : ' · chưa có bảng') + ' · bản lưu ' + (valid(cached) ? 'có' : 'không') + ' · CSP: ' + (seen.join(' | ') || 'không'), 40000); };
     setTimeout(() => report('5s'), 5000); setTimeout(() => report('20s'), 20000);
   } catch (_) {}
   const t0 = performance.now();
