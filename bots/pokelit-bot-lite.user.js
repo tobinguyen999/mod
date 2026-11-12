@@ -5,6 +5,8 @@
 // @description  Bản rút gọn: bot chơi + mở hòm, không báo cáo. Chỉ bật một trong hai bản (Bot hoặc Bot Lite).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
+// @updateURL    https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokelit-bot-lite.user.js
+// @downloadURL  https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokelit-bot-lite.user.js
 // @grant        none
 // @inject-into  page
 // ==/UserScript==

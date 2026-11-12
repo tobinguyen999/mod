@@ -5,6 +5,8 @@
 // @description  Bản đầy đủ cho PokéLoop (pokeloop.online): như PokeLit Bot (báo cáo ván, học từ bạn…). Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
+// @updateURL    https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokeloop-bot.user.js
+// @downloadURL  https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokeloop-bot.user.js
 // @grant        none
 // @inject-into  page
 // ==/UserScript==

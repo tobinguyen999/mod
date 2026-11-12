@@ -5,6 +5,8 @@
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
+// @updateURL    https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokelit-bot.user.js
+// @downloadURL  https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokelit-bot.user.js
 // @grant        none
 // @inject-into  page
 // ==/UserScript==

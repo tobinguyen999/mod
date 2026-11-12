@@ -5,6 +5,8 @@
 // @description  Bản rút gọn cho PokéLoop (pokeloop.online): bot chơi + mở hòm + rift, không báo cáo. Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
+// @updateURL    https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokeloop-bot-lite.user.js
+// @downloadURL  https://raw.githubusercontent.com/tobinguyen999/mod/main/bots/pokeloop-bot-lite.user.js
 // @grant        none
 // @inject-into  page
 // ==/UserScript==
