@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.17
+// @version      0.9.18
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.17';
+  const VERSION = '0.9.18';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -1737,7 +1737,7 @@
   }
 
   // ===== v0.8.7: né vùng chủ động + thoát kẹt 1-2s + tiến độ tới mục tiêu =====
-  const us = { hist: [], until: 0, vec: [0, 0], level: 0, lastAt: -1e9, lastAng: null, lastMag: 0, gc: { key: '', d: null, at: 0, fails: 0 }, warn: '', warnUntil: 0 };
+  const us = { hist: [], until: 0, vec: [0, 0], level: 0, lastAt: -1e9, lastAng: null, lastMag: 0, gc: { key: '', d: null, at: 0, fails: 0 }, warn: '', warnUntil: 0, titanLeaveAt: 0, titanLeaveFail: 0, titanGiveUp: false };
   function unstickPick(ctx, level) {
     const me = ctx.me; let best = [1, 0], bs = -1e9, bang = 0;
     const gAng = goalState.goal ? Math.atan2(goalState.goal.y - me.y, goalState.goal.x - me.x) : null;
@@ -1784,7 +1784,7 @@
               }
             }
           }
-          // v0.9.17: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
+          // v0.9.18: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
           if (!ctx.inArena && ctx.titan && ctx.titan.portal && Number.isFinite(ctx.titan.portal.x)) {
             const tp = ctx.titan.portal, td = dist(me, tp);
             riftRush = true;
@@ -1805,6 +1805,22 @@
           else if (huntStats.active === 0) { const xg = exploreGoal(ctx, now); if (xg) { const cg = { ...xg, force: true }; setGoal(cg, 'mở hòm bất chấp — đi tìm hòm'); forcedGoal = cg; } }
         }
         ctx.force = !!forcedGoal;
+        // v0.9.18: Titan cuồng nộ (quá 360s) → không đủ điều kiện hạ (NOVA không còn vòng an toàn) → rời Titan Rift bằng hàm rời của chính game.
+        // Nếu game không cho rời (vd. co-op không phải chủ phòng) thì thôi né, đi thẳng vào Titan để thua.
+        if (ctx.inArena && ctx.titan && ctx.titan.enrage && state.titanMode) {
+          if (!us.titanGiveUp && (!us.titanLeaveAt || now - us.titanLeaveAt > 1500)) {
+            us.titanLeaveAt = now;
+            const ok = safe(() => !!W.__PL.Titan.leave(), false);
+            console.info(`${TAG} Titan cuồng nộ (quá 360s): rời Titan Rift`, ok ? 'ok' : 'game không cho rời');
+            usWarn(ok ? 'Titan cuồng nộ (quá 360s): đã rời Titan Rift' : 'Titan cuồng nộ: không rời được, thôi né');
+            if (!ok && ++us.titanLeaveFail >= 2) us.titanGiveUp = true;
+          }
+          if (us.titanGiveUp && ctx.titan.boss) {
+            const dx = ctx.titan.boss.x - ctx.me.x, dy = ctx.titan.boss.y - ctx.me.y, dd = Math.hypot(dx, dy) || 1;
+            botMode = 'tự thua (Titan cuồng nộ)'; us.lastMag = 1; us.gc.key = '';
+            return [dx / dd, dy / dd];
+          }
+        } else { us.titanGiveUp = false; us.titanLeaveFail = 0; }
         const nv = forcedGoal ? null : titanNova(ctx);
         if (nv) { botMode = nv.mode; us.lastMag = Math.hypot(nv.v[0], nv.v[1]); us.gc.key = ''; return nv.v; }
         const hz = forcedGoal ? null : hazardEscape(ctx);
