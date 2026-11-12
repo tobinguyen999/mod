@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.20
+// @version      0.9.21
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.20';
+  const VERSION = '0.9.21';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -649,7 +649,7 @@
     const t = ctx.titan; if (!t || !t.nova || !t.nova.safe || t.nova.left > 6) return null;
     const me = ctx.me, dx = t.nova.x - me.x, dy = t.nova.y - me.y, d = Math.hypot(dx, dy);
     if (d < 35) return { v: [0, 0], mode: 'đứng trong vòng an toàn' };
-    // v0.9.20: chọn hướng chạy tới vòng an toàn nhưng tránh tia / vòng nổ đang báo trước và tường trong 0.75s tới
+    // v0.9.18: chọn hướng chạy tới vòng an toàn nhưng tránh tia / vòng nổ đang báo trước và tường trong 0.75s tới
     const spd = Math.max(40, me.baseSpd || me.spd || 90);
     let best = [dx / d, dy / d], bs = Infinity;
     for (let k = 0; k < 24; k++) {
@@ -1146,7 +1146,7 @@
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
     let found = null, iterations = 0, bestN = start, bestH = start.f + 1e-6 + (trail.get(trailKey(sx * cell + 16, sy * cell + 16))?.n ? Math.min(30, trail.get(trailKey(sx * cell + 16, sy * cell + 16)).n) * 3 : 0);
 
-    const maxIt = goal.mode === 'tới hòm' || goal.mode === 'rương' ? 1100 : 500;   // v0.9.20: đường tới hòm được tìm sâu hơn (mục tiêu khác giữ 500)
+    const maxIt = goal.mode === 'tới hòm' || goal.mode === 'rương' ? 1100 : 500;   // v0.9.18: đường tới hòm được tìm sâu hơn (mục tiêu khác giữ 500)
     while (heap.length && iterations < maxIt) {
       const cur = pop();
       if (cur.g > (costs.get(K(cur.x, cur.y)) ?? Infinity) + 1e-9) continue; // mục cũ đã có đường tốt hơn
@@ -1778,12 +1778,12 @@
     const now = Date.now(), me = ctx.me;
     const playing = state.enabled && W.__PL?.Game?.state === 'playing';
     forcedGoal = null;   // v0.9.12: biến cấp module (think0 dùng chung) — mở hòm bất chấp
-    // v0.9.20: tắt "Boss phán xét (phút 30)" mà game đã kéo vào Judgment → đứng im cho tới khi thua (kết thúc ván). Bật thì chơi bình thường.
+    // v0.9.18: tắt "Boss phán xét (phút 30)" mà game đã kéo vào Judgment → đứng im cho tới khi thua (kết thúc ván). Bật thì chơi bình thường.
     if (playing && !state.judgeMode && safe(() => !!W.__PL.Judgment?.active, false)) {
       botMode = 'đứng im (tắt Boss phán xét)'; us.lastMag = 0; us.hist = []; us.until = 0;
       return [0, 0];
     }
-    // v0.9.20: ghi nhật ký Titan (đổi pha, NOVA có/không vòng an toàn, bot có đứng trong vòng lúc nổ không)
+    // v0.9.18: ghi nhật ký Titan (đổi pha, NOVA có/không vòng an toàn, bot có đứng trong vòng lúc nổ không)
     try {
       const T = state.titanMode ? ctx.titan : null;
       const bh = T && T.boss && T.boss.maxHp > 0 ? Math.round(100 * T.boss.hp / T.boss.maxHp) : 0, myhp = me && me.maxHp > 0 ? Math.round(100 * me.hp / me.maxHp) : 0;
@@ -1795,7 +1795,7 @@
         if (T.enrage && !us.enrageLogged) { us.enrageLogged = true; W.__PLH_RUN_LOG?.recordTitan?.({ e: 'cuồng nộ (quá 360s)', ph: T.phase, bh, hp: myhp }); }
       } else { us.titanPh = -1; us.nova = null; us.enrageLogged = false; }
     } catch (_) {}
-    // v0.9.20: Titan cuồng nộ (quá 360s): không còn vòng an toàn, không đủ điều kiện hạ → lao vào Titan để bị hạ gục. KHÔNG dùng hàm rời của game (sợ tính là bỏ cả ván).
+    // v0.9.18: Titan cuồng nộ (quá 360s): không còn vòng an toàn, không đủ điều kiện hạ → lao vào Titan để bị hạ gục. KHÔNG dùng hàm rời của game (sợ tính là bỏ cả ván).
     if (playing && state.titanMode && ctx.titan && !ctx.titan.portal && ctx.titan.enrage) {
       const T = ctx.titan, bx = T.boss ? T.boss.x : T.cx, by = T.boss ? T.boss.y : T.cy, dx = bx - me.x, dy = by - me.y, dd = Math.hypot(dx, dy);
       botMode = 'tự thua (Titan cuồng nộ)'; us.lastMag = 1; us.hist = []; us.until = 0;
@@ -1823,7 +1823,7 @@
               }
             }
           }
-          // v0.9.20: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
+          // v0.9.18: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
           if (!ctx.inArena && ctx.titan && ctx.titan.portal && Number.isFinite(ctx.titan.portal.x)) {
             const tp = ctx.titan.portal, td = dist(me, tp);
             riftRush = true;
@@ -1853,7 +1853,7 @@
         }
         if (hz) { botMode = 'né vùng'; us.lastMag = 1; us.gc.key = ''; return hz; }
         if (now < us.until) { botMode = 'thoát kẹt'; us.lastMag = 1; us.gc.key = ''; return us.vec; }
-        // v0.9.20: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
+        // v0.9.18: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
         {
           const gm0 = goalState.mode, gk0 = String(goalState.key || '').split('#')[0];
           if ((gm0 === 'tới hòm' || gm0 === 'rương') && goalState.goal && us.lastMag < 0.05) {
@@ -3115,62 +3115,6 @@
     addBtn(itemBtns, 'Chọn tất cả', () => { state.itemWant = [...SHOP_ORDER]; itemChecks.forEach(([, c]) => { c.checked = true; }); persistSettings(); });
     addBtn(itemBtns, 'Bỏ chọn hết', () => { state.itemWant = []; itemChecks.forEach(([, c]) => { c.checked = false; }); persistSettings(); });
 
-    // v0.9.20: Tự roll gacha — bấm đúng các nút của game (pull-100 vé vàng ×100, pull-10b vé tím ×10, rồi lẻ ×10/×1) cho tới hết vé. Không sửa vé, không đổi cài đặt game.
-    const gG = group('Gacha tự động', false);
-    const gx = { on: false, clicks: 0, msg: 'Mở màn Gacha, chọn banner rồi bấm Bắt đầu.' };
-    const gsleep = ms => new Promise(r => setTimeout(r, ms));
-    const gel = id => document.getElementById(id);
-    const gvis = el => { if (!el || el.classList.contains('hidden')) return false; const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; };
-    const gTickets = () => {
-      const tk = safe(() => W.__PL.DB.save.tickets, null);
-      if (tk && Number.isFinite(Number(tk.t1))) return { t1: Number(tk.t1) || 0, t10: Number(tk.t10) || 0 };
-      const m = String(gel('gacha-tickets')?.textContent || '').match(/(\d[\d.,]*)\D+(\d[\d.,]*)/);
-      return m ? { t1: parseInt(m[1].replace(/\D/g, ''), 10) || 0, t10: parseInt(m[2].replace(/\D/g, ''), 10) || 0 } : null;
-    };
-    const gPick = tk => {
-      if (tk.t1 >= 100 && gel('pull-100')) return 'pull-100';
-      if (tk.t10 >= 1 && gel('pull-10b')) return 'pull-10b';
-      if (tk.t1 >= 10 && gel('pull-10')) return 'pull-10';
-      if (tk.t1 >= 1 && gel('pull-1')) return 'pull-1';
-      return null;
-    };
-    const gSet = m => { gx.msg = m; if (gInfo) gInfo.textContent = m; };
-    const gStop = m => { gx.on = false; gSet(m); gBtn.textContent = '▶ Bắt đầu roll'; gBtn.classList.add('plh-pri'); };
-    async function gLoop() {
-      gx.clicks = 0; let sigPrev = '', sigAt = Date.now(), noChange = 0;
-      while (gx.on) {
-        if (!gvis(gel('scr-gacha'))) return gStop(`Đã dừng: không còn ở màn Gacha (đã bấm ${gx.clicks} lần)`);
-        const fx = gel('pull-fx');
-        if (gvis(fx)) {   // đang có hiệu ứng / bảng kết quả: bấm Skip của game, lật các thẻ úp, rồi bấm "Tiếp tục"
-          const close = gel('pull-close');
-          if (gvis(close)) { close.click(); await gsleep(500); sigPrev = ''; continue; }
-          const flip = [...document.querySelectorAll('button, [role="button"], .btn')].find(b => gvis(b) && /flip\s*all|lật\s*(hết|tất\s*cả)/i.test(b.textContent || ''));   // nút "Flip all" của game
-          if (flip) { flip.click(); await gsleep(350); }
-          const sk = [...fx.querySelectorAll('.summon-skip')].find(gvis); if (sk) sk.click();
-          const down = [...fx.querySelectorAll('.pcard.down')]; for (const c of down) { if (!gx.on) return; c.click(); await gsleep(40); }
-          const sig = down.length + '|' + fx.querySelectorAll('.pcard').length + '|' + !!sk + '|' + !!flip;
-          if (sig !== sigPrev) { sigPrev = sig; sigAt = Date.now(); } else if (Date.now() - sigAt > 25000) return gStop('Đã dừng: bảng kết quả đứng yên 25s. Nút đang hiện: ' + ([...document.querySelectorAll('button')].filter(gvis).map(b => (b.textContent || '').trim().replace(/\s+/g, ' ')).filter(Boolean).slice(0, 10).join(' | ') || '(không thấy nút)') + ' — gửi tôi dòng này');
-          await gsleep(250); continue;
-        }
-        sigPrev = ''; sigAt = Date.now();
-        const tk = gTickets(); if (!tk) return gStop('Đã dừng: không đọc được số vé');
-        const id = gPick(tk);
-        if (!id) return gStop(`Hết vé — xong (đã bấm ${gx.clicks} lần)`);
-        const btn = gel(id); if (!btn || btn.disabled) return gStop(`Đã dừng: nút ${id} không bấm được`);
-        gSet(`Đang roll… ${id} · còn vé ×1: ${tk.t1}, vé ×10: ${tk.t10} · đã bấm ${gx.clicks}`);
-        btn.click(); gx.clicks++;
-        await gsleep(900);
-        if (!gvis(gel('pull-fx'))) {   // không thấy bảng kết quả: kiểm tra vé có trừ không, nếu 2 lần liền không đổi thì dừng
-          const tk2 = gTickets();
-          if (tk2 && tk2.t1 === tk.t1 && tk2.t10 === tk.t10) { if (++noChange >= 2) return gStop('Đã dừng: bấm roll nhưng vé không đổi (có hộp thoại lạ?) — hãy xem màn hình'); } else noChange = 0;
-        } else noChange = 0;
-      }
-    }
-    const gRow = document.createElement('div'); gRow.className = 'plh-btnrow'; gG.appendChild(gRow);
-    const gBtn = addBtn(gRow, '▶ Bắt đầu roll', () => { if (gx.on) { gStop(`Đã dừng (đã bấm ${gx.clicks} lần)`); return; } if (!gvis(gel('scr-gacha'))) { gSet('Hãy mở màn Gacha và chọn banner trước.'); return; } gx.on = true; gBtn.textContent = '⏹ Dừng'; gBtn.classList.remove('plh-pri'); gLoop(); });
-    gBtn.classList.add('plh-pri');
-    const gInfo = document.createElement('div'); gInfo.className = 'plh-info'; gInfo.textContent = gx.msg; gG.appendChild(gInfo);
-    const gNote = document.createElement('div'); gNote.className = 'plh-info'; gNote.textContent = 'Thứ tự: vé vàng ×100 → vé tím ×10 → vé vàng lẻ ×10 rồi ×1, tới hết vé. Roll vào banner đang chọn. Bật "Skip animation" của game để nhanh hơn.'; gG.appendChild(gNote);
     const g2 = group('Học từ bạn', false);
     addCheck(g2, 'learnRec', 'Ghi lại khi tôi tự chơi', 'Chỉ ghi khi Bot đang tắt'); addCheck(g2, 'learnUse', 'Bot học theo cách tôi chơi');
     const lmWrap = document.createElement('div'); lmWrap.style.cssText = 'padding:6px 0 2px';
