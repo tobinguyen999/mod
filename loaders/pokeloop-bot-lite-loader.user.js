@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite (tự cập nhật)
 // @namespace    local.pokeloop.bot.lite.autoupdate
-// @version      1.0.4
+// @version      1.0.5
 // @description  Bộ nạp: mỗi lần F5 tự dùng bản bot mới nhất từ kho GitHub (có bản lưu dự phòng khi mất mạng).
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -59,8 +59,8 @@
   let cached = '';
   try { cached = GM_getValue(KEY, ''); } catch (_) {}
   if (valid(cached)) run(cached);   // chạy ngay bản đã lưu, không chờ mạng
-  try { console.log('[Bộ nạp bot 1.0.4] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
-  note('đã chạy (1.0.4) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
+  try { console.log('[Bộ nạp bot 1.0.5] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
+  note('đã chạy (1.0.5) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
   // Chẩn đoán: báo CSP chặn gì và bot đã khởi động trong trang chưa
   try {
     const viol = e => note('CSP chặn: ' + (e.effectiveDirective || '?') + ' ← ' + String(e.blockedURI || '').slice(0, 60), 30000);
@@ -79,6 +79,8 @@
         if (txt === cached) return;
         GM_setValue(KEY, txt);
         try { console.log('[Bộ nạp bot] đã tải bản mới', Math.round(txt.length / 1024) + ' KB'); } catch (_) {}
+        // PokéLoop không cần viết lại trang nên chạy bot ngay khi lần đầu chưa có bản lưu (không phụ thuộc việc nạp lại).
+        if (!valid(cached) && FILE.indexOf('pokeloop') === 0) { note('lần đầu: chạy bot ngay (' + Math.round(txt.length / 1024) + ' KB)', 8000); run(txt); return; }
         // Chỉ nạp lại ngay nếu tải xong trong vài giây đầu (chưa vào ván); nếu chậm thì bản mới dùng ở lần F5 sau để không mất ván đang chơi.
         let recent = false; try { recent = Date.now() - Number(sessionStorage.getItem(GUARD) || 0) < 30000; } catch (_) {}
         if (performance.now() - t0 < 5000 && !recent) { try { sessionStorage.setItem(GUARD, String(Date.now())); } catch (_) {} location.reload(); }
