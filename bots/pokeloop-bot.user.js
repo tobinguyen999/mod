@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Full
 // @namespace    local.pokeloop.bot.full
-// @version      0.9.17
+// @version      0.9.18
 // @description  Bản đầy đủ cho PokéLoop (pokeloop.online): như PokeLit Bot (báo cáo ván, học từ bạn…). Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.17 Loop Full';
+  const VERSION = '0.9.18 Loop Full';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -649,7 +649,21 @@
     const t = ctx.titan; if (!t || !t.nova || !t.nova.safe || t.nova.left > 6) return null;
     const me = ctx.me, dx = t.nova.x - me.x, dy = t.nova.y - me.y, d = Math.hypot(dx, dy);
     if (d < 35) return { v: [0, 0], mode: 'đứng trong vòng an toàn' };
-    return { v: [dx / d, dy / d], mode: 'chạy vào vòng an toàn' };
+    // v0.9.18: chọn hướng chạy tới vòng an toàn nhưng tránh tia / vòng nổ đang báo trước và tường trong 0.75s tới
+    const spd = Math.max(40, me.baseSpd || me.spd || 90);
+    let best = [dx / d, dy / d], bs = Infinity;
+    for (let k = 0; k < 24; k++) {
+      const a = k * Math.PI / 12, ux = Math.cos(a), uy = Math.sin(a);
+      let sc = 0;
+      for (const tt of [0.25, 0.5, 0.75]) {
+        const px = me.x + ux * spd * tt, py = me.y + uy * spd * tt;
+        if (blocked(ctx, px, py)) { sc += 6000; continue; }
+        if (safe(() => ctx.hazardInside(px, py), false)) sc += 4000;
+      }
+      sc += Math.hypot(t.nova.x - (me.x + ux * spd * 0.75), t.nova.y - (me.y + uy * spd * 0.75));
+      if (sc < bs) { bs = sc; best = [ux, uy]; }
+    }
+    return { v: best, mode: 'chạy vào vòng an toàn' };
   }
   // v0.9.16: né Arceus kiểu dev — tìm kiếm chùm 3 bước × 8 hướng, mô phỏng Arceus đuổi theo, tránh mép đấu trường, tiện thể áp sát huyền thoại khi đủ an toàn.
   let judgeK = -1, judgeBounds = null, judgeWorldHooked = null, judgeLast = [0, 0];
@@ -1132,7 +1146,8 @@
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
     let found = null, iterations = 0, bestN = start, bestH = start.f + 1e-6 + (trail.get(trailKey(sx * cell + 16, sy * cell + 16))?.n ? Math.min(30, trail.get(trailKey(sx * cell + 16, sy * cell + 16)).n) * 3 : 0);
 
-    while (heap.length && iterations < 500) {
+    const maxIt = goal.mode === 'tới hòm' || goal.mode === 'rương' ? 1100 : 500;   // v0.9.18: đường tới hòm được tìm sâu hơn (mục tiêu khác giữ 500)
+    while (heap.length && iterations < maxIt) {
       const cur = pop();
       if (cur.g > (costs.get(K(cur.x, cur.y)) ?? Infinity) + 1e-9) continue; // mục cũ đã có đường tốt hơn
       iterations++;
@@ -1194,6 +1209,7 @@
   function huntFail(me, key, now) {
     key = String(key).split('#')[0]; markBad(me.x, me.y, now); coarse.at = 0; pathCache.at = 0;
     const n = (huntFails.get(key) || 0) + 1; huntFails.set(key, n);
+    W.__PLH_RUN_LOG?.recordChestEv?.(n >= 3 ? 'bỏ hòm (thất bại 3 lần)' : 'thử lại hòm (kẹt/hết giờ/không tới được)');
     if (n >= 3) { huntFails.delete(key); propBlacklist.set(key, now + 20000); return true; }   // v0.9.13: 60s → 20s để quay lại mở sớm
     return false;
   }
@@ -1259,7 +1275,7 @@
     const liveKeys = new Set();
     for (const q of ctx.specials || []) if (q && (q.type === 'bigchest' || q.type === 'chest')) { const qp = xyPoint(q); if (qp) liveKeys.add(`sp:${q.type}:${q.id ?? (qp.x + ',' + qp.y)}`); }
     const cands = [];
-    const markOpened = (key) => { const tr = chestTrack.get(key) || { max: 0 }; if (!tr.counted) { tr.counted = true; huntStats.opened++; } chestTrack.set(key, tr); propBlacklist.set(key, now + 600000); };
+    const markOpened = (key) => { const tr = chestTrack.get(key) || { max: 0 }; if (!tr.counted) { tr.counted = true; huntStats.opened++; W.__PLH_RUN_LOG?.recordChestEv?.('mở xong'); } chestTrack.set(key, tr); propBlacklist.set(key, now + 600000); };
     const consider = sp => {
       if (!sp || seen.has(sp)) return; seen.add(sp);
       if (sp.type !== 'bigchest' && sp.type !== 'chest') return;
@@ -1737,7 +1753,7 @@
   }
 
   // ===== v0.8.7: né vùng chủ động + thoát kẹt 1-2s + tiến độ tới mục tiêu =====
-  const us = { hist: [], until: 0, vec: [0, 0], level: 0, lastAt: -1e9, lastAng: null, lastMag: 0, gc: { key: '', d: null, at: 0, fails: 0 }, warn: '', warnUntil: 0 };
+  const us = { hist: [], until: 0, vec: [0, 0], level: 0, lastAt: -1e9, lastAng: null, lastMag: 0, gc: { key: '', d: null, at: 0, fails: 0 }, warn: '', warnUntil: 0, enrageLogged: false, nova: null, titanPh: -1, zeroSince: 0, zeroKey: '', zeroN: 0, zeroAt: 0 };
   function unstickPick(ctx, level) {
     const me = ctx.me; let best = [1, 0], bs = -1e9, bang = 0;
     const gAng = goalState.goal ? Math.atan2(goalState.goal.y - me.y, goalState.goal.x - me.x) : null;
@@ -1762,6 +1778,29 @@
     const now = Date.now(), me = ctx.me;
     const playing = state.enabled && W.__PL?.Game?.state === 'playing';
     forcedGoal = null;   // v0.9.12: biến cấp module (think0 dùng chung) — mở hòm bất chấp
+    // v0.9.18: tắt "Boss phán xét (phút 30)" mà game đã kéo vào Judgment → đứng im cho tới khi thua (kết thúc ván). Bật thì chơi bình thường.
+    if (playing && !state.judgeMode && safe(() => !!W.__PL.Judgment?.active, false)) {
+      botMode = 'đứng im (tắt Boss phán xét)'; us.lastMag = 0; us.hist = []; us.until = 0;
+      return [0, 0];
+    }
+    // v0.9.18: ghi nhật ký Titan (đổi pha, NOVA có/không vòng an toàn, bot có đứng trong vòng lúc nổ không)
+    try {
+      const T = state.titanMode ? ctx.titan : null;
+      const bh = T && T.boss && T.boss.maxHp > 0 ? Math.round(100 * T.boss.hp / T.boss.maxHp) : 0, myhp = me && me.maxHp > 0 ? Math.round(100 * me.hp / me.maxHp) : 0;
+      if (T && !T.portal) {
+        if (T.phase !== us.titanPh) { us.titanPh = T.phase; W.__PLH_RUN_LOG?.recordTitan?.({ e: 'phase', ph: T.phase, bh }); }
+        const nv = T.nova;
+        if (nv) { if (!us.nova) us.nova = { safe: nv.safe }; us.nova.x = nv.x; us.nova.y = nv.y; us.nova.lx = me.x; us.nova.ly = me.y; }
+        else if (us.nova) { const n = us.nova; us.nova = null; W.__PLH_RUN_LOG?.recordTitan?.({ e: 'nova', safe: !!n.safe, inside: !!n.safe && ((n.lx - n.x) ** 2 + ((n.ly - n.y) / 0.75) ** 2 < 22500), hp: myhp }); }
+        if (T.enrage && !us.enrageLogged) { us.enrageLogged = true; W.__PLH_RUN_LOG?.recordTitan?.({ e: 'cuồng nộ (quá 360s)', ph: T.phase, bh, hp: myhp }); }
+      } else { us.titanPh = -1; us.nova = null; us.enrageLogged = false; }
+    } catch (_) {}
+    // v0.9.18: Titan cuồng nộ (quá 360s): không còn vòng an toàn, không đủ điều kiện hạ → lao vào Titan để bị hạ gục. KHÔNG dùng hàm rời của game (sợ tính là bỏ cả ván).
+    if (playing && state.titanMode && ctx.titan && !ctx.titan.portal && ctx.titan.enrage) {
+      const T = ctx.titan, bx = T.boss ? T.boss.x : T.cx, by = T.boss ? T.boss.y : T.cy, dx = bx - me.x, dy = by - me.y, dd = Math.hypot(dx, dy);
+      botMode = 'tự thua (Titan cuồng nộ)'; us.lastMag = 1; us.hist = []; us.until = 0;
+      return Number.isFinite(dd) && dd > 6 ? [dx / dd, dy / dd] : [0, 0];
+    }
     if (playing) {
       try {
         if (state.judgeMode && !ctx.coop?.active) {
@@ -1784,7 +1823,7 @@
               }
             }
           }
-          // v0.9.17: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
+          // v0.9.18: CỔNG TITAN — xuất hiện là lao vào ngay, ưu tiên trên mọi thứ (không điều kiện máu / thời gian / khoảng cách / quái)
           if (!ctx.inArena && ctx.titan && ctx.titan.portal && Number.isFinite(ctx.titan.portal.x)) {
             const tp = ctx.titan.portal, td = dist(me, tp);
             riftRush = true;
@@ -1814,6 +1853,22 @@
         }
         if (hz) { botMode = 'né vùng'; us.lastMag = 1; us.gc.key = ''; return hz; }
         if (now < us.until) { botMode = 'thoát kẹt'; us.lastMag = 1; us.gc.key = ''; return us.vec; }
+        // v0.9.18: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
+        {
+          const gm0 = goalState.mode, gk0 = String(goalState.key || '').split('#')[0];
+          if ((gm0 === 'tới hòm' || gm0 === 'rương') && goalState.goal && us.lastMag < 0.05) {
+            if (!us.zeroSince) us.zeroSince = now;
+            else if (now - us.zeroSince > 1500) {
+              us.zeroSince = 0;
+              us.zeroN = us.zeroKey === gk0 && now - us.zeroAt < 10000 ? us.zeroN + 1 : 1; us.zeroKey = gk0; us.zeroAt = now;
+              W.__PLH_RUN_LOG?.recordChestEv?.('tự đứng yên giữa đường tới hòm');
+              if (us.zeroN >= 2) {
+                huntFail(me, gk0, now); W.__PLH_RUN_LOG?.recordChestEv?.('bỏ hòm vì tự đứng yên');
+                goalState = { key: '', goal: null, mode: '', since: now, reason: 'tự đứng yên → đổi hòm' }; us.gc = { key: '', d: null, at: now, fails: 0 };
+              } else { us.vec = unstickPick(ctx, 0); us.until = now + 800; usWarn('đứng yên giữa đường tới hòm → đổi hướng'); botMode = 'thoát kẹt'; us.lastMag = 1; return us.vec; }
+            }
+          } else us.zeroSince = 0;
+        }
         us.hist.push({ t: now, x: me.x, y: me.y, m: us.lastMag });
         while (us.hist.length && now - us.hist[0].t > 2300) us.hist.shift();
         const holding = String(goalState.key || '').endsWith('#hold') || botMode === 'đứng chờ';
@@ -2291,7 +2346,7 @@
         reward: { start: rewardSnap(P), judge: null, after: null, end: null }, version: VERSION, ticketStart: safe(() => ({ t1: P.DB.save.tickets.t1, t10: P.DB.save.tickets.t10 }), null), startedAt: now, endedAt: null, pokemon: { dex: p.dex ?? null, name: species || '?', nameSource: speciesSource },
         settings: { ...state, autoDownload: reportPrefs.autoDownload }, timeline: [],
         damage: { byType: { 'chạm quái': 0, 'đạn': 0, 'vùng': 0, 'khác': 0 }, hits: [] },
-        xp: { collected: 0, left: 0, perMinute: 0 }, waterSeconds: 0, stuckCount: 0, unsticks: [], hazardDodges: 0, hazardKinds: {}, sharpTurns: 0, cards: [], kills: 0,
+        xp: { collected: 0, left: 0, perMinute: 0 }, waterSeconds: 0, stuckCount: 0, unsticks: [], titan: [], chestEv: {}, hazardDodges: 0, hazardKinds: {}, sharpTurns: 0, cards: [], kills: 0,
         rifts: [], events: [], freezes: [], lastSevenSeconds: [], issues: [], timelineBot: [], arenaHits: [], arenaBossLogs: [], unknownSources: [], samples: sampleData
       };
       chestMem.clear(); chestTrack.clear(); propBlacklist.clear(); blkFails.clear(); mapMem = new Map(); hunt.visited.clear(); hunt.nearSince.clear(); hunt.exTarget = null;
@@ -2304,7 +2359,7 @@
       run._prevSlotsState = safe(() => JSON.stringify((p.slots || p.moves || []).map(m => ({ name: m.name || m.id || m.def?.name || m.key, lvl: m.lvl || m.level || 1 }))), '');
       prevEnemiesCount = 0;
       const s = snap(P, p); run._prev = s;
-      W.__PLH_RUN_LOG = { recordStuck: (m) => { if (run) run.stuckCount++; }, recordUnstick: (u) => { if (run) { run.stuckCount++; if (run.unsticks.length < 60) run.unsticks.push({ t: Math.round((Date.now() - run.startedAt) / 1000), ...u }); } }, recordCoop: (n, host) => { if (run) { run.coop = run.coop || { maxMates: 0, host: null, reviveGoals: 0, followGoals: 0 }; run.coop.maxMates = Math.max(run.coop.maxMates, n); run.coop.host = host; } }, recordShop: (t) => { if (run) { run.shop = run.shop || []; if (run.shop.length < 20) run.shop.push({ t: Math.round((Date.now() - run.startedAt) / 1000), what: t }); } }, recordCoopGoal: (k) => { if (run) { run.coop = run.coop || { maxMates: 0, host: null, reviveGoals: 0, followGoals: 0 }; run.coop[k] = (run.coop[k] || 0) + 1; } }, recordHazard: (k) => { if (run) { run.hazardDodges++; run.hazardKinds[k] = (run.hazardKinds[k] || 0) + 1; } } };
+      W.__PLH_RUN_LOG = { recordStuck: (m) => { if (run) run.stuckCount++; }, recordUnstick: (u) => { if (run) { run.stuckCount++; if (run.unsticks.length < 60) run.unsticks.push({ t: Math.round((Date.now() - run.startedAt) / 1000), ...u }); } }, recordCoop: (n, host) => { if (run) { run.coop = run.coop || { maxMates: 0, host: null, reviveGoals: 0, followGoals: 0 }; run.coop.maxMates = Math.max(run.coop.maxMates, n); run.coop.host = host; } }, recordShop: (t) => { if (run) { run.shop = run.shop || []; if (run.shop.length < 20) run.shop.push({ t: Math.round((Date.now() - run.startedAt) / 1000), what: t }); } }, recordCoopGoal: (k) => { if (run) { run.coop = run.coop || { maxMates: 0, host: null, reviveGoals: 0, followGoals: 0 }; run.coop[k] = (run.coop[k] || 0) + 1; } }, recordHazard: (k) => { if (run) { run.hazardDodges++; run.hazardKinds[k] = (run.hazardKinds[k] || 0) + 1; } }, recordTitan: (e) => { if (run) { run.titan = run.titan || []; if (run.titan.length < 120) run.titan.push({ t: Math.round((Date.now() - run.startedAt) / 1000), ...e }); } }, recordChestEv: (k) => { if (run) { run.chestEv = run.chestEv || {}; run.chestEv[k] = (run.chestEv[k] || 0) + 1; } } };
       console.info(`${TAG} Nhật ký trận bắt đầu (v${VERSION})`, { version: run.version, pokemon: run.pokemon, settings: run.settings });
     }
 
@@ -2391,6 +2446,8 @@
         ...rewardText(r),
         `Vé hiện có: ×1 ${safe(() => W.__PL.DB.save.tickets.t1, '?')}, ×10 ${safe(() => W.__PL.DB.save.tickets.t10, '?')} (lúc bắt đầu trận: ×1 ${r.ticketStart?.t1 ?? '?'}, ×10 ${r.ticketStart?.t10 ?? '?'})`,
         ...(r.shop?.length ? ['KECLEON: ' + r.shop.map(x => `${fmt(x.t)} ${x.what}`).join(' | ')] : []),
+        ...(r.titan?.length ? ['TITAN (giây | sự kiện | chi tiết)', ...r.titan.map(x => `${fmt(x.t)} | ${x.e} | ${x.e === 'nova' ? (x.safe ? (x.inside ? 'có vòng an toàn: ĐỨNG TRONG vòng lúc nổ' : 'có vòng an toàn: ĐỨNG NGOÀI vòng lúc nổ') : 'KHÔNG có vòng an toàn') + `, HP ${x.hp}%` : x.e === 'phase' ? `pha ${x.ph}, Titan còn ${x.bh}% máu` : `pha ${x.ph}, Titan còn ${x.bh}% máu, HP bạn ${x.hp}%`}`)] : []),
+        ...(r.chestEv && Object.keys(r.chestEv).length ? ['KẾT QUẢ ĐI TỚI HÒM: ' + JSON.stringify(r.chestEv)] : []),
         `Né vùng chủ động: ${r.hazardDodges || 0} ${JSON.stringify(r.hazardKinds || {})}`,
         `Kẹt: ${r.stuckCount}; đổi hướng gấp: ${r.sharpTurns}; thời gian nước: ${r.waterSeconds.toFixed(1)}s`,
         `Kết thúc ván: ${r.reason || '?'}`,
