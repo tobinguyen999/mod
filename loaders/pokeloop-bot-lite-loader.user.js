@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite (tự cập nhật)
 // @namespace    local.pokeloop.bot.lite.autoupdate
-// @version      1.0.2
+// @version      1.0.3
 // @description  Bộ nạp: mỗi lần F5 tự dùng bản bot mới nhất từ kho GitHub (có bản lưu dự phòng khi mất mạng).
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
 // ==/UserScript==
 
@@ -49,8 +50,15 @@
   let cached = '';
   try { cached = GM_getValue(KEY, ''); } catch (_) {}
   if (valid(cached)) run(cached);   // chạy ngay bản đã lưu, không chờ mạng
-  try { console.log('[Bộ nạp bot 1.0.2] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
-  note('đã chạy (1.0.2) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
+  try { console.log('[Bộ nạp bot 1.0.3] đã chạy; bản lưu:', valid(cached) ? Math.round(cached.length / 1024) + ' KB' : 'chưa có'); } catch (_) {}
+  note('đã chạy (1.0.3) · bản lưu: ' + (valid(cached) ? 'có' : 'chưa có, đang tải từ GitHub…'), 6000);
+  // Chẩn đoán: báo CSP chặn gì và bot đã khởi động trong trang chưa
+  try {
+    const viol = e => note('CSP chặn: ' + (e.effectiveDirective || '?') + ' ← ' + String(e.blockedURI || '').slice(0, 60), 30000);
+    addEventListener('securitypolicyviolation', viol, true);
+    setTimeout(() => removeEventListener('securitypolicyviolation', viol, true), 15000);
+    setTimeout(() => { let ok = false, why = ''; try { const uw = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window; ok = !!uw.__PLH_ACTIVE; } catch (e) { why = String(e); } note(ok ? 'bot đã khởi động ✓' : 'bot CHƯA khởi động ✗ ' + why, 30000); }, 5000);
+  } catch (_) {}
   const t0 = performance.now();
   GM_xmlhttpRequest({
     method: 'GET', url: BASE + FILE + '?t=' + Date.now(), timeout: 15000, headers: { 'Cache-Control': 'no-cache' },
