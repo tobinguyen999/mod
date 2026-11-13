@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite
 // @namespace    local.pokeloop.bot.lite
-// @version      0.9.22
+// @version      0.9.23
 // @description  Bản rút gọn cho PokéLoop (pokeloop.online): bot chơi + mở hòm + rift, không báo cáo. Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.22 Loop Lite';
+  const VERSION = '0.9.23 Loop Lite';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -1844,12 +1844,14 @@
         // v0.9.18: đang đi tới hòm mà bot tự đứng yên (hướng đi 0) → bộ phát hiện kẹt bên dưới không bắt được (nó chỉ tính khi bot đang cố đi). Sau 1.5s: đổi hướng; lần 2 cùng hòm trong 10s: bỏ hòm đó, chọn hòm khác.
         {
           const gm0 = goalState.mode, gk0 = String(goalState.key || '').split('#')[0];
-          if ((gm0 === 'tới hòm' || gm0 === 'rương') && goalState.goal && us.lastMag < 0.05) {
+          if ((gm0 === 'tới hòm' || gm0 === 'rương' || gm0 === 'rift' || gm0 === 'cổng Titan') && goalState.goal && us.lastMag < 0.05) {
             if (!us.zeroSince) us.zeroSince = now;
             else if (now - us.zeroSince > 1500) {
               us.zeroSince = 0;
               us.zeroN = us.zeroKey === gk0 && now - us.zeroAt < 10000 ? us.zeroN + 1 : 1; us.zeroKey = gk0; us.zeroAt = now;
-              W.__PLH_RUN_LOG?.recordChestEv?.('tự đứng yên giữa đường tới hòm');
+              const isChestMode = gm0 === 'tới hòm' || gm0 === 'rương';
+              if (isChestMode) W.__PLH_RUN_LOG?.recordChestEv?.('tự đứng yên giữa đường tới hòm'); else W.__PLH_RUN_LOG?.recordChestEv?.('tự đứng yên giữa đường tới ' + gm0);
+              if (!isChestMode) { us.vec = unstickPick(ctx, Math.min(2, us.zeroN - 1)); us.until = now + 900; usWarn('đứng yên giữa đường tới ' + gm0 + ' → đổi hướng'); botMode = 'thoát kẹt'; us.lastMag = 1; return us.vec; }
               if (us.zeroN >= 2) {
                 huntFail(me, gk0, now); W.__PLH_RUN_LOG?.recordChestEv?.('bỏ hòm vì tự đứng yên');
                 goalState = { key: '', goal: null, mode: '', since: now, reason: 'tự đứng yên → đổi hòm' }; us.gc = { key: '', d: null, at: now, fails: 0 };
@@ -2044,6 +2046,15 @@
           const dx = ax, dy = ay, len = al;
           botMode = 'rift (commit)';
           return [dx / len, dy / len];
+        }
+        // v0.9.23: lao rift mà gặp tường ngay trước mặt: trượt sang góc gần nhất không bị chặn (không được đứng yên giữa lúc rift đang đếm ngược)
+        if (!commitDanger && ctx.riftRush) {
+          const base = Math.atan2(ay, ax);
+          for (const off of [0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 2.6, -2.6]) {
+            const a = base + off;
+            if (!blocked(ctx, me.x + Math.cos(a) * 36, me.y + Math.sin(a) * 36)) { botMode = 'rift (vòng tường)'; return [Math.cos(a), Math.sin(a)]; }
+          }
+          botMode = 'rift (commit)'; return [ax / al, ay / al];
         }
       }
 
