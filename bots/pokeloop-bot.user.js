@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Full
 // @namespace    local.pokeloop.bot.full
-// @version      0.9.21
+// @version      0.9.22
 // @description  Bản đầy đủ cho PokéLoop (pokeloop.online): như PokeLit Bot (báo cáo ván, học từ bạn…). Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.21 Loop Full';
+  const VERSION = '0.9.22 Loop Full';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -1210,7 +1210,7 @@
     key = String(key).split('#')[0]; markBad(me.x, me.y, now); coarse.at = 0; pathCache.at = 0;
     const n = (huntFails.get(key) || 0) + 1; huntFails.set(key, n);
     W.__PLH_RUN_LOG?.recordChestEv?.(n >= 3 ? 'bỏ hòm (thất bại 3 lần)' : 'thử lại hòm (kẹt/hết giờ/không tới được)');
-    if (n >= 3) { huntFails.delete(key); propBlacklist.set(key, now + 20000); return true; }   // v0.9.13: 60s → 20s để quay lại mở sớm
+    if (n >= 3) { huntFails.delete(key); propBlacklist.set(key, now + 8000); return true; }   // v0.9.22: 20s → 8s để quay lại mở sớm
     return false;
   }
   const routeCache = new Map();
@@ -1329,7 +1329,7 @@
         return { goal: { x: me.x, y: me.y, weight: 2.2, mode: 'mở hòm', key: key + '#hold', hold: true, center: pos, holdR: zoneR }, reason: `đứng mở hòm to (${(Number(sp.open) || 0).toFixed(1)}/3.5s)` };
       }
       if (hunt.lastKey !== key) { hunt.lastKey = key; huntStats.goals++; }
-      const ap = approachPoint(ctx, pos, 40);
+      const ap = approachPoint(ctx, pos, 22);   // v0.9.22: sát hòm hơn ngưỡng mở (≥44px) để không đứng kẹt ở ~49px
       let tgt = ap;
       if (dS > 500) { const rt = coarseRoute(ctx, ap.x, ap.y, key, now); let pick = null; for (const n of rt) { if (dist(me, n) <= 420) pick = n; else if (pick) break; } if (pick && dist(me, pick) > 60) tgt = pick; }
       return { goal: { x: tgt.x, y: tgt.y, weight: 2.2, mode: 'tới hòm', key, rush: dS < 350, limMs, final: ap }, reason: `đi tới hòm to, cách ${dS.toFixed(0)}px (${active} hòm đã biết)` };
@@ -1516,7 +1516,7 @@
     }
 
     // v0.8.2: VẬT ĐẶC BIỆT theo mã game: bigchest (đứng gần 3.5s), altar (cột buff), chest (hòm nhỏ đánh vỡ)
-    if ((state.chest || state.buff) && hp > .6) {
+    if ((state.chest || state.buff) && (hp > .6 || state.chest)) {   // v0.9.22: hòm không xét máu
       const strong = (me.level || 1) >= 6 && hp > 0.45;
       const cands = [];
       const memSp = [...mapMem.values()].filter(m => Math.hypot(m.x - me.x, m.y - me.y) < 650).map(m => m.sp);
@@ -1535,11 +1535,11 @@
           chestTrack.set(key, tr);
           if (tr.max >= 3.0 && op < 0.2) { propBlacklist.set(key, now + 300000); continue; }
           // xa quá mà gần còn XP thì thôi
-          if (dS > 600) continue;
+          if (dS > 600 && !state.chest) continue;
         }
-        if (sp.type === 'bigchest' && state.chest && (near150.length <= 2 || (strong && near150.length <= 5)) && dS < 900) cands.push({ sp, pos, key, dS, pri: 3 });
+        if (sp.type === 'bigchest' && state.chest) cands.push({ sp, pos, key, dS, pri: 3 });
         else if (sp.type === 'altar' && state.buff && !sp.used && near150.length < 6 && dS < 550) cands.push({ sp, pos, key, dS, pri: 2 });
-        else if (sp.type === 'chest' && state.chest && near150.length < 5 && dS < 400) cands.push({ sp, pos, key, dS, pri: 1 });
+        else if (sp.type === 'chest' && state.chest) cands.push({ sp, pos, key, dS, pri: 1 });
       }
       // đang mở hòm dở thì ưu tiên giữ nguyên hòm đó
       cands.sort((p, q) => (String(goalState.key).startsWith(q.key)) - (String(goalState.key).startsWith(p.key)) || q.pri - p.pri || p.dS - q.dS);
@@ -1551,12 +1551,11 @@
         if (c.sp.type === 'bigchest') {
           const zoneR = Math.max(46, me.r + (c.sp.r || 14) + 24) - 2;
           if (c.dS < zoneR) {
-            if (near150.length >= 6 || hp < 0.35) { propBlacklist.set(c.key, now + 10000); }
-            else if (goalState.key === c.key + '#hold' && now - goalState.since > 4500 && (Number(c.sp.open) || 0) < 0.3) { propBlacklist.set(c.key, now + 60000); }
+            if (goalState.key === c.key + '#hold' && now - goalState.since > 4500 && (Number(c.sp.open) || 0) < 0.3) { propBlacklist.set(c.key, now + 60000); }
             else return setGoal({ x: me.x, y: me.y, weight: 2.2, mode: 'mở hòm', key: c.key + '#hold', hold: true, center: c.pos, holdR: zoneR }, `đứng mở hòm to (${(Number(c.sp.open) || 0).toFixed(1)}/3.5s)`);
           } else {
             const dx = me.x - c.pos.x, dy = me.y - c.pos.y, L = Math.hypot(dx, dy) || 1;
-            return setGoal({ x: c.pos.x + dx / L * 40, y: c.pos.y + dy / L * 40, weight: 2.2, mode: 'tới hòm', key: c.key, rush: c.dS < 350 && hp > 0.4 }, `đi tới hòm to, cách ${c.dS.toFixed(0)}px`);
+            return setGoal({ x: c.pos.x + dx / L * 22, y: c.pos.y + dy / L * 22, weight: 2.2, mode: 'tới hòm', key: c.key, rush: c.dS < 350 && hp > 0.4 }, `đi tới hòm to, cách ${c.dS.toFixed(0)}px`);
           }
         } else if (c.sp.type === 'altar') {
           const dx = me.x - c.pos.x, dy = me.y - c.pos.y, L = Math.hypot(dx, dy) || 1;
@@ -1865,7 +1864,7 @@
               if (us.zeroN >= 2) {
                 huntFail(me, gk0, now); W.__PLH_RUN_LOG?.recordChestEv?.('bỏ hòm vì tự đứng yên');
                 goalState = { key: '', goal: null, mode: '', since: now, reason: 'tự đứng yên → đổi hòm' }; us.gc = { key: '', d: null, at: now, fails: 0 };
-              } else { us.vec = unstickPick(ctx, 0); us.until = now + 800; usWarn('đứng yên giữa đường tới hòm → đổi hướng'); botMode = 'thoát kẹt'; us.lastMag = 1; return us.vec; }
+              } else { const cp = goalState.final || goalState.goal, cd = cp ? dist(me, cp) : 1e9; if (cd < 120 && cd > 2) { const ddx = cp.x - me.x, ddy = cp.y - me.y, dl = Math.hypot(ddx, ddy) || 1; us.vec = [ddx / dl, ddy / dl]; } else us.vec = unstickPick(ctx, 0); us.until = now + 800; usWarn('đứng yên giữa đường tới hòm → đổi hướng'); botMode = 'thoát kẹt'; us.lastMag = 1; return us.vec; }
             }
           } else us.zeroSince = 0;
         }
