@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.26
+// @version      0.9.27
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.26';
+  const VERSION = '0.9.27';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,

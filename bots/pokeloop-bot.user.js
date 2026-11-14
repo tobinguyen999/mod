@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Full
 // @namespace    local.pokeloop.bot.full
-// @version      0.9.26
+// @version      0.9.27
 // @description  Bản đầy đủ cho PokéLoop (pokeloop.online): như PokeLit Bot (báo cáo ván, học từ bạn…). Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.23 Loop Full';
+  const VERSION = '0.9.27 Loop Full';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,

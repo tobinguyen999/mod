@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite
 // @namespace    local.pokeloop.bot.lite
-// @version      0.9.26
+// @version      0.9.27
 // @description  Bản rút gọn cho PokéLoop (pokeloop.online): bot chơi + mở hòm + rift, không báo cáo. Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.23 Loop Lite';
+  const VERSION = '0.9.27 Loop Lite';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,

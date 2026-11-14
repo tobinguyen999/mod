@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot Lite
 // @namespace    local.pokelit.bot.lite
-// @version      0.9.26
+// @version      0.9.27
 // @description  Bản rút gọn: bot chơi + mở hòm, không báo cáo. Chỉ bật một trong hai bản (Bot hoặc Bot Lite).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.26 Lite';
+  const VERSION = '0.9.27 Lite';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
