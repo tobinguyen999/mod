@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite
 // @namespace    local.pokeloop.bot.lite
-// @version      0.9.31
+// @version      0.9.32
 // @description  Bản rút gọn cho PokéLoop (pokeloop.online): bot chơi + mở hòm + rift, không báo cáo. Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.31 Loop Lite';
+  const VERSION = '0.9.32 Loop Lite';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -154,7 +154,7 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const safe = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
 
-  // v0.9.31: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
+  // v0.9.32: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
   const bgNotes = (() => { try { return JSON.parse(localStorage.getItem('plh_bgnotes') || '[]').slice(-60); } catch (_) { return []; } })();
   function bgNote(m) {
     try { console.info(`${TAG} ${m}`); bgNotes.push({ at: Date.now(), m: String(m).slice(0, 300) }); if (bgNotes.length > 60) bgNotes.splice(0, bgNotes.length - 60); localStorage.setItem('plh_bgnotes', JSON.stringify(bgNotes)); } catch (_) {}
@@ -1208,7 +1208,7 @@
     key = String(key).split('#')[0]; markBad(me.x, me.y, now); coarse.at = 0; pathCache.at = 0;
     const n = (huntFails.get(key) || 0) + 1; huntFails.set(key, n);
     W.__PLH_RUN_LOG?.recordChestEv?.(n >= 3 ? 'bỏ hòm (thất bại 3 lần)' : 'thử lại hòm (kẹt/hết giờ/không tới được)');
-    if (n >= 3) { huntFails.delete(key); const tot = (huntAbandon.get(key) || 0) + 1; huntAbandon.set(key, tot); propBlacklist.set(key, now + Math.min(300000, 8000 * Math.pow(2, tot - 1))); return true; }   // v0.9.31: hòm kẹt lặp lại → cấm lâu dần (8s→5 phút)   // v0.9.22: 20s → 8s để quay lại mở sớm
+    if (n >= 3) { huntFails.delete(key); const tot = (huntAbandon.get(key) || 0) + 1; huntAbandon.set(key, tot); propBlacklist.set(key, now + Math.min(300000, 8000 * Math.pow(2, tot - 1))); return true; }   // v0.9.32: hòm kẹt lặp lại → cấm lâu dần (8s→5 phút)   // v0.9.22: 20s → 8s để quay lại mở sớm
     return false;
   }
   const routeCache = new Map();
@@ -1364,7 +1364,7 @@
     hunt.exTarget = best; hunt.exUntil = now + 9000; hunt.exSeq++;
     return { x: best.x, y: best.y, weight: 1.0, mode: 'tìm hòm', key: 'explore:' + hunt.exSeq, limMs: 12000 };
   }
-  // v0.9.31: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
+  // v0.9.32: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
   // Dùng Events._dbg() = {x,y (Pokémon lạc), tx,ty (điểm đích), state, hp, t}: tới gần Pokémon (nó tự bám theo) rồi dẫn tới đích.
   let lostLast = '', lostPrevId = '', lostLastDbg = '';
   function lostMonGoal(me, ctx) {
@@ -1382,7 +1382,7 @@
     const d = safe(() => P.Events._dbg && P.Events._dbg(), null);
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null;
     if (/done|end|over|fail|success|complete/i.test(String(d.state || ''))) return null;
-    if (ctx && (ctx.inArena || (ctx.titan && !ctx.titan.portal))) return null;   // v0.9.31: đang trong arena/Titan → tọa độ thế giới chính vô nghĩa
+    if (ctx && (ctx.inArena || (ctx.titan && !ctx.titan.portal))) return null;   // v0.9.32: đang trong arena/Titan → tọa độ thế giới chính vô nghĩa
     const hasT = Number.isFinite(d.tx) && Number.isFinite(d.ty);
     const dm = dist(me, { x: d.x, y: d.y });
     const follow = 70;                       // game: bán kính bám theo ≈ r+r+18
@@ -1867,7 +1867,7 @@
         if (ctx.inArena || (ctx.titan && !ctx.titan.portal)) { if (!us.inFightPrev) { goalState = { key: '', goal: null, mode: '', since: now, reason: 'vào arena → bỏ mục tiêu cũ' }; us.gc = { key: '', d: null, at: now, fails: 0 }; stickyRift = null; forcedGoal = null; } us.inFightPrev = true; } else us.inFightPrev = false;
         if (ctx.inArena) us.wasArena = true;
         else if (us.wasArena) { us.wasArena = false; for (const k of [...propBlacklist.keys()]) if (String(k).startsWith('sp:') && !chestTrack.get(k)?.counted) propBlacklist.delete(k); huntFails.clear(); }
-        // v0.9.31: GIẢI CỨU POKÉMON LẠC — bắt buộc (dưới rift/Titan, trên mở hòm), chỉ khi còn kịp và máu ổn
+        // v0.9.32: GIẢI CỨU POKÉMON LẠC — bắt buộc (dưới rift/Titan, trên mở hòm), chỉ khi còn kịp và máu ổn
         if (!forcedGoal && state.events && !ctx.inArena && !(ctx.titan && !ctx.titan.portal) && me.hp / Math.max(1, me.maxHp) >= .3) {
           const lg = lostMonGoal(me, ctx);
           if (lg) {
@@ -1896,7 +1896,7 @@
           const gm0 = goalState.mode, gk0 = String(goalState.key || '').split('#')[0];
           if ((gm0 === 'tới hòm' || gm0 === 'rương' || gm0 === 'rift' || gm0 === 'cổng Titan') && goalState.goal && us.lastMag < 0.05) {
             if (!us.zeroSince) us.zeroSince = now;
-            else if (now - us.zeroSince > 1500) {
+            else if (now - us.zeroSince > 600) {
               us.zeroSince = 0;
               us.zeroN = us.zeroKey === gk0 && now - us.zeroAt < 10000 ? us.zeroN + 1 : 1; us.zeroKey = gk0; us.zeroAt = now;
               const isChestMode = gm0 === 'tới hòm' || gm0 === 'rương';
@@ -2186,6 +2186,18 @@
         if (score < bestScore) { bestScore = score; best = [dx, dy]; }
       }
 
+      // v0.9.32: CHỐNG ĐỨNG YÊN — đang đi tới hòm/rương/buff mà điểm số chọn "đứng yên" (bước đi bị cắt từng đoạn) → trượt sang hướng gần nhất về phía đích không bị chặn
+      if (Math.hypot(best[0], best[1]) === 0 && goal && !goal.hold && (goal.mode === 'tới hòm' || goal.mode === 'rương' || goal.mode === 'cột buff') && (aim || goal)) {
+        const tgt = aim || goal, ax = tgt.x - me.x, ay = tgt.y - me.y, al = Math.hypot(ax, ay);
+        const nearThreat = ctx.enemies.some(e => dist(me, e) < 70) || ctx.projectiles.some(q => dist(me, q) < 90);
+        if (al > 24 && !nearThreat) {
+          const base = Math.atan2(ay, ax);
+          for (const off of [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.7, -1.7]) {
+            const ang = base + off, px = me.x + Math.cos(ang) * 40, py = me.y + Math.sin(ang) * 40;
+            if (!blocked(ctx, px, py) && !(ctx.hazardInside && ctx.hazardInside(px, py))) { best = [Math.cos(ang), Math.sin(ang)]; W.__PLH_RUN_LOG?.recordChestEv?.('chống đứng yên (ép đi tiếp)'); break; }
+          }
+        }
+      }
       const mag = Math.hypot(best[0], best[1]);
       botMode = goal?.mode || (ctx.inArena ? 'arena' : 'né');
       const res = mag > 0 ? [best[0] / mag, best[1] / mag] : [0, 0];
@@ -3325,7 +3337,7 @@
   }
 
   let uiTick = 0;
-  // v0.9.31: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // v0.9.32: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
   // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
   const RS_KEY = 'plh_restart_pending';
   const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '' };
