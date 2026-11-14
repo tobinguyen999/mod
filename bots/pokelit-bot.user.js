@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.28
+// @version      0.9.29
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.28';
+  const VERSION = '0.9.29';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -1369,6 +1369,28 @@
     hunt.exTarget = best; hunt.exUntil = now + 9000; hunt.exSeq++;
     return { x: best.x, y: best.y, weight: 1.0, mode: 'tìm hòm', key: 'explore:' + hunt.exSeq, limMs: 12000 };
   }
+  // v0.9.29: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
+  // Dùng Events._dbg() = {x,y (Pokémon lạc), tx,ty (điểm đích), state, hp, t}: tới gần Pokémon (nó tự bám theo) rồi dẫn tới đích.
+  let lostLast = '';
+  function lostMonGoal(me) {
+    const P = W.__PL; if (!P || !P.Events) return null;
+    const id = safe(() => P.Events.current, null);
+    if (!id || typeof id !== 'string' || !/lost|stray|rescue|lac|lạc|astray/i.test(id)) return null;
+    const d = safe(() => P.Events._dbg && P.Events._dbg(), null);
+    if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null;
+    if (/done|end|over|fail|success|complete/i.test(String(d.state || ''))) return null;
+    const hasT = Number.isFinite(d.tx) && Number.isFinite(d.ty);
+    const dm = dist(me, { x: d.x, y: d.y });
+    const follow = 70;                       // game: bán kính bám theo ≈ r+r+18
+    let g, why;
+    if (dm > follow && !(hasT && dm < 110)) { g = { x: d.x, y: d.y, key: 'lost:pickup' }; why = `đi tới Pokémon lạc (${Math.round(dm)}px)`; }
+    else if (hasT) { g = { x: d.tx, y: d.ty, key: 'lost:deliver' }; why = `dẫn Pokémon tới đích (${Math.round(dist(me, { x: d.tx, y: d.ty }))}px)`; }
+    else { g = { x: d.x, y: d.y, key: 'lost:pickup' }; why = 'ở cạnh Pokémon lạc'; }
+    if (lostLast !== g.key) { lostLast = g.key; console.info(`${TAG} Giải cứu Pokémon lạc: ${why} · state=${d.state} hp=${d.hp} t=${d.t}`); }
+    g.reason = why;
+    return g;
+  }
+
   function chooseGoal(ctx) {
     const me = ctx.me, now = Date.now();
     const near120 = ctx.enemies.filter(e => dist(me, e) < 120);
@@ -1457,10 +1479,11 @@
     // THỨ TỰ 3: Sự kiện (Meowth / Giải cứu)
     const rescue = eventObj && (eventObj.target || eventObj.rescue || eventObj.x != null || eventObj.position) ? (eventObj.target || eventObj.rescue || eventObj.position || eventObj) : null;
     const rescueGoal = rescue ? xyPoint(rescue) : null;
+    const lostGoal = state.events ? lostMonGoal(me) : null;
     const eventGoal = activeChase && state.events && hp >= .35 ? (() => {
       const d = dist(me, activeChase), speed = Math.max(1, me.baseSpd || me.spd || 90), lead = Math.min(1.2, d / speed);
       return { x: activeChase.x + (activeChase.__vx || 0) * lead, y: activeChase.y + (activeChase.__vy || 0) * lead, key: `meowth:${activeChase.id}:${Math.round(now/100)}` };
-    })() : (state.events && rescueGoal ? { ...rescueGoal, key: 'rescue' } : null);
+    })() : (state.events && lostGoal ? lostGoal : (state.events && rescueGoal ? { ...rescueGoal, key: 'rescue' } : null));
 
     const relocateCanInterrupt = (hp < .35 || urgentClose) && (near120.length >= 8 || close.length > 0);
 
@@ -1509,7 +1532,7 @@
     { const cg = !urgentClose ? coopGoal(ctx, hp) : null;
       if (cg) { const { reason: cr, ...cgoal } = cg; return setGoal({ ...cgoal, weight: 2.1 }, cr); } }
     if (eventGoal && !relocateCanInterrupt) {
-      return setGoal({ ...eventGoal, weight: 2.3, mode: activeChase ? 'đuổi Meowth' : 'sự kiện' }, activeChase ? 'đón đầu Meowth' : 'đi tới sự kiện');
+      return setGoal({ ...eventGoal, weight: 2.3, mode: activeChase ? 'đuổi Meowth' : (eventGoal.key && eventGoal.key.startsWith('lost:') ? 'giải cứu Pokémon lạc' : 'sự kiện') }, activeChase ? 'đón đầu Meowth' : (eventGoal.reason || 'đi tới sự kiện'));
     }
 
     // v0.9.1: săn hòm toàn map (không xét máu / số quái)
@@ -3327,7 +3350,7 @@
   }
 
   let uiTick = 0;
-  // v0.9.28: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // v0.9.29: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
   // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
   const RS_KEY = 'plh_restart_pending';
   const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '' };
