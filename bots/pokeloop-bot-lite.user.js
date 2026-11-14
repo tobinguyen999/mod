@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Lite
 // @namespace    local.pokeloop.bot.lite
-// @version      0.9.33
+// @version      0.9.34
 // @description  Bản rút gọn cho PokéLoop (pokeloop.online): bot chơi + mở hòm + rift, không báo cáo. Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.33 Loop Lite';
+  const VERSION = '0.9.34 Loop Lite';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -154,7 +154,7 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const safe = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
 
-  // v0.9.33: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
+  // v0.9.34: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
   const bgNotes = (() => { try { return JSON.parse(localStorage.getItem('plh_bgnotes') || '[]').slice(-60); } catch (_) { return []; } })();
   function bgNote(m) {
     try { console.info(`${TAG} ${m}`); bgNotes.push({ at: Date.now(), m: String(m).slice(0, 300) }); if (bgNotes.length > 60) bgNotes.splice(0, bgNotes.length - 60); localStorage.setItem('plh_bgnotes', JSON.stringify(bgNotes)); } catch (_) {}
@@ -1208,7 +1208,7 @@
     key = String(key).split('#')[0]; markBad(me.x, me.y, now); coarse.at = 0; pathCache.at = 0;
     const n = (huntFails.get(key) || 0) + 1; huntFails.set(key, n);
     W.__PLH_RUN_LOG?.recordChestEv?.(n >= 3 ? 'bỏ hòm (thất bại 3 lần)' : 'thử lại hòm (kẹt/hết giờ/không tới được)');
-    if (n >= 3) { huntFails.delete(key); const tot = (huntAbandon.get(key) || 0) + 1; huntAbandon.set(key, tot); propBlacklist.set(key, now + Math.min(60000, 8000 * Math.pow(2, tot - 1))); return true; }   // v0.9.33: hòm kẹt lặp lại → cấm lâu dần (8s→60s)   // v0.9.22: 20s → 8s để quay lại mở sớm
+    if (n >= 3) { huntFails.delete(key); const tot = (huntAbandon.get(key) || 0) + 1; huntAbandon.set(key, tot); propBlacklist.set(key, now + Math.min(60000, 8000 * Math.pow(2, tot - 1))); return true; }   // v0.9.34: hòm kẹt lặp lại → cấm lâu dần (8s→60s)   // v0.9.22: 20s → 8s để quay lại mở sớm
     return false;
   }
   const routeCache = new Map();
@@ -1364,7 +1364,7 @@
     hunt.exTarget = best; hunt.exUntil = now + 9000; hunt.exSeq++;
     return { x: best.x, y: best.y, weight: 1.0, mode: 'tìm hòm', key: 'explore:' + hunt.exSeq, limMs: 12000 };
   }
-  // v0.9.33: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
+  // v0.9.34: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
   // Dùng Events._dbg() = {x,y (Pokémon lạc), tx,ty (điểm đích), state, hp, t}: tới gần Pokémon (nó tự bám theo) rồi dẫn tới đích.
   let lostLast = '', lostPrevId = '', lostLastDbg = '';
   function lostMonGoal(me, ctx) {
@@ -1382,7 +1382,7 @@
     const d = safe(() => P.Events._dbg && P.Events._dbg(), null);
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null;
     if (/done|end|over|fail|success|complete/i.test(String(d.state || ''))) return null;
-    if (ctx && (ctx.inArena || (ctx.titan && !ctx.titan.portal))) return null;   // v0.9.33: đang trong arena/Titan → tọa độ thế giới chính vô nghĩa
+    if (ctx && (ctx.inArena || (ctx.titan && !ctx.titan.portal))) return null;   // v0.9.34: đang trong arena/Titan → tọa độ thế giới chính vô nghĩa
     const hasT = Number.isFinite(d.tx) && Number.isFinite(d.ty);
     const dm = dist(me, { x: d.x, y: d.y });
     const follow = 70;                       // game: bán kính bám theo ≈ r+r+18
@@ -1867,7 +1867,7 @@
         if (ctx.inArena || (ctx.titan && !ctx.titan.portal)) { if (!us.inFightPrev) { goalState = { key: '', goal: null, mode: '', since: now, reason: 'vào arena → bỏ mục tiêu cũ' }; us.gc = { key: '', d: null, at: now, fails: 0 }; stickyRift = null; forcedGoal = null; } us.inFightPrev = true; } else us.inFightPrev = false;
         if (ctx.inArena) us.wasArena = true;
         else if (us.wasArena) { us.wasArena = false; for (const k of [...propBlacklist.keys()]) if (String(k).startsWith('sp:') && !chestTrack.get(k)?.counted) propBlacklist.delete(k); huntFails.clear(); }
-        // v0.9.33: GIẢI CỨU POKÉMON LẠC — bắt buộc (dưới rift/Titan, trên mở hòm), chỉ khi còn kịp và máu ổn
+        // v0.9.34: GIẢI CỨU POKÉMON LẠC — bắt buộc (dưới rift/Titan, trên mở hòm), chỉ khi còn kịp và máu ổn
         if (!forcedGoal && state.events && !ctx.inArena && !(ctx.titan && !ctx.titan.portal) && me.hp / Math.max(1, me.maxHp) >= .3) {
           const lg = lostMonGoal(me, ctx);
           if (lg) {
@@ -1909,7 +1909,7 @@
             }
           } else us.zeroSince = 0;
         }
-        // v0.9.33: hòm "đường không tìm được" quá 2.5s → bỏ ngay (cấm 15s), chọn hòm khác thay vì đứng chờ
+        // v0.9.34: hòm "đường không tìm được" quá 2.5s → bỏ ngay (cấm 15s), chọn hòm khác thay vì đứng chờ
         {
           const gk1 = String(goalState.key || '').split('#')[0];
           if (goalState.mode === 'tới hòm' && goalState.goal && gk1.startsWith('sp:') && !pathCache.reachable) {
@@ -2194,7 +2194,7 @@
         if (score < bestScore) { bestScore = score; best = [dx, dy]; }
       }
 
-      // v0.9.33: CHỐNG ĐỨNG YÊN — đang đi tới hòm/rương/buff mà điểm số chọn "đứng yên" (bước đi bị cắt từng đoạn) → trượt sang hướng gần nhất về phía đích không bị chặn
+      // v0.9.34: CHỐNG ĐỨNG YÊN — đang đi tới hòm/rương/buff mà điểm số chọn "đứng yên" (bước đi bị cắt từng đoạn) → trượt sang hướng gần nhất về phía đích không bị chặn
       if (Math.hypot(best[0], best[1]) === 0 && goal && !goal.hold && (goal.mode === 'tới hòm' || goal.mode === 'rương' || goal.mode === 'cột buff') && (aim || goal)) {
         const tgt = aim || goal, ax = tgt.x - me.x, ay = tgt.y - me.y, al = Math.hypot(ax, ay);
         const nearThreat = ctx.enemies.some(e => dist(me, e) < 70) || ctx.projectiles.some(q => dist(me, q) < 90);
@@ -3345,48 +3345,19 @@
   }
 
   let uiTick = 0;
-  // v0.9.33: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // v0.9.34: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
   // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
   const RS_KEY = 'plh_restart_pending';
   const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '', region: null, regTry: 0 };
-  let lastRegion = null;   // v0.9.33: vùng của ván đang chơi — ván mới phải lặp lại đúng vùng này
+  let lastRegion = null;   // v0.9.34: vùng của ván đang chơi — ván mới phải lặp lại đúng vùng này
   function restartTick(P) {
-    if (!state.autoRestart) { rs.on = false; return; }
-    const G = P.Game, st = G && G.state, now = Date.now();
-    if (st === 'playing') { const rg = safe(() => P.Region && P.Region.picked, null); if (Number.isFinite(rg)) lastRegion = rg; if (rs.on) { bgNote(`Tự chơi lại: đã vào ván mới (${rs.n} bước)`); } rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
-    if (!rs.on) {
-      let pend = 0; safe(() => { pend = Number(sessionStorage.getItem(RS_KEY)) || 0; }, null);
-      const fresh = pend && now - pend < 600000;
-      if (st === 'over' || fresh) {
-        rs.on = true; rs.t0 = now; rs.n = 0;
-        const waitMs = st === 'over' ? clamp(Number(state.restartDelay) || 10, 3, 60) * 1000 : 1500;
-        rs.next = now + waitMs;
-        safe(() => sessionStorage.setItem(RS_KEY, String(fresh && pend ? pend : now)), null);
-        bgNote(`Tự chơi lại: chờ ${Math.round(waitMs / 1000)}s (trạng thái ${st})`);
-      } else return;
-    }
-    if (now < rs.next) return;
-    if (now - rs.t0 > 240000) { bgNote(`Tự chơi lại: bỏ cuộc sau 4 phút`); rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
-    const say = (m) => { if (m !== rs.lastLog) { rs.lastLog = m; bgNote(`Tự chơi lại: ${m}`); } };
-    const U = P.Updater;
-    if (U && U.blocking) { say('game đang cập nhật/lưu, chờ'); rs.next = now + 1000; return; }
-    const vis = (el) => el && el.offsetParent !== null && !el.disabled;
-    const q = (s) => { const el = document.querySelector(s); return vis(el) ? el : null; };
-    rs.n++;
-    let el;
-    if (q('#region-list button.region-card')) {
-      const want = lastRegion != null ? lastRegion : safe(() => P.Region && P.Region.picked, null);
-      const card = want != null ? q(`#region-list button.region-card[data-r="${want}"]:not([disabled])`) : q('#region-list button.region-card.on:not([disabled])');
-      if (card) { say(`chọn vùng ${want} (giữ đúng vùng vừa chơi)`); card.click(); rs.next = now + 1200; rs.regTry = 0; return; }
-      rs.regTry++;
-      if (rs.regTry >= 4) { say(`không thấy thẻ vùng ${want}, gọi startRun() (dùng vùng đã chọn gần nhất)`); safe(() => { if (want != null && P.Region) P.Region.picked = want; G.startRun(); }, null); rs.regTry = 0; }
-      rs.next = now + 800; return;
-    }
-    if ((el = q('#scr-menu button[data-go="play"]') || q('button[data-go="play"]'))) { say('bấm Chơi'); el.click(); rs.next = now + 1200; return; }
-    if ((el = q('#btn-again'))) { say('bấm Chơi lại'); el.click(); rs.next = now + 1200; return; }
-    if ((el = q('.tap-blink'))) { say('chạm để vào game'); el.click(); rs.next = now + 1500; return; }
-    if (st === 'over' && rs.n % 4 === 0) { say('gọi startRun trực tiếp'); safe(() => G.startRun(), null); }
-    rs.next = now + 800;
+    // v0.9.34: quay lại cơ chế của bản 0.9.23 — hết ván thì chờ restartDelay giây rồi gọi thẳng Game.startRun() (game tự dùng đúng vùng vừa chơi)
+    if (state.autoRestart && P.Game.state === 'over' && !restartRequested) {
+      restartRequested = true;
+      const waitMs = clamp(Number(state.restartDelay) || 10, 3, 60) * 1000;
+      bgNote(`Tự chơi lại: chờ ${Math.round(waitMs / 1000)}s rồi gọi startRun() (vùng ${safe(() => P.Region.picked, '?')})`);
+      setTimeout(() => { if (state.autoRestart && W.__PL?.Game?.state === 'over') safe(() => W.__PL.Game.startRun(), null); }, waitMs);
+    } else if (P.Game.state !== 'over') restartRequested = false;
   }
 
   setInterval(() => {
