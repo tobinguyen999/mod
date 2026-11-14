@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.27
+// @version      0.9.28
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.27';
+  const VERSION = '0.9.28';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -3327,11 +3327,48 @@
   }
 
   let uiTick = 0;
+  // v0.9.28: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
+  const RS_KEY = 'plh_restart_pending';
+  const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '' };
+  function restartTick(P) {
+    if (!state.autoRestart) { rs.on = false; return; }
+    const G = P.Game, st = G && G.state, now = Date.now();
+    if (st === 'playing') { if (rs.on) { console.info(`${TAG} Tự chơi lại: đã vào ván mới (${rs.n} bước)`); } rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
+    if (!rs.on) {
+      let pend = 0; safe(() => { pend = Number(sessionStorage.getItem(RS_KEY)) || 0; }, null);
+      const fresh = pend && now - pend < 600000;
+      if (st === 'over' || fresh) {
+        rs.on = true; rs.t0 = now; rs.n = 0;
+        const waitMs = st === 'over' ? clamp(Number(state.restartDelay) || 10, 3, 60) * 1000 : 1500;
+        rs.next = now + waitMs;
+        safe(() => sessionStorage.setItem(RS_KEY, String(fresh && pend ? pend : now)), null);
+        console.info(`${TAG} Tự chơi lại: chờ ${Math.round(waitMs / 1000)}s (trạng thái ${st})`);
+      } else return;
+    }
+    if (now < rs.next) return;
+    if (now - rs.t0 > 240000) { console.info(`${TAG} Tự chơi lại: bỏ cuộc sau 4 phút`); rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
+    const say = (m) => { if (m !== rs.lastLog) { rs.lastLog = m; console.info(`${TAG} Tự chơi lại: ${m}`); } };
+    const U = P.Updater;
+    if (U && U.blocking) { say('game đang cập nhật/lưu, chờ'); rs.next = now + 1000; return; }
+    const vis = (el) => el && el.offsetParent !== null && !el.disabled;
+    const q = (s) => { const el = document.querySelector(s); return vis(el) ? el : null; };
+    rs.n++;
+    let el;
+    if ((el = q('#region-list button.region-card.sel:not([disabled]), #region-list button.region-card.selected:not([disabled]), #region-list button.region-card.active:not([disabled])') || q('#region-list button.region-card:not([disabled])'))) { say('chọn vùng'); el.click(); rs.next = now + 1200; return; }
+    if ((el = q('#scr-menu button[data-go="play"]') || q('button[data-go="play"]'))) { say('bấm Chơi'); el.click(); rs.next = now + 1200; return; }
+    if ((el = q('#btn-again'))) { say('bấm Chơi lại'); el.click(); rs.next = now + 1200; return; }
+    if ((el = q('.tap-blink'))) { say('chạm để vào game'); el.click(); rs.next = now + 1500; return; }
+    if (st === 'over' && rs.n % 4 === 0) { say('gọi startRun trực tiếp'); safe(() => G.startRun(), null); }
+    rs.next = now + 800;
+  }
+
   setInterval(() => {
     const P = W.__PL;
     if (!P) return;
     install(P);
     shopTick(P);
+    restartTick(P);
     try {
       const o = pendingCardOffer, nowT = Date.now();
       if (state.autoPick && state.enabled && o && !o.done && o.options.length && nowT - o.at >= 700 && nowT - o.lastTry >= 400) {
@@ -3367,12 +3404,6 @@
     backgroundKeep(P);
     if (state.background && state.enabled && P.Game.state === 'paused') safe(() => P.Game.togglePause(), null);
 
-    if (state.autoRestart && P.Game.state === 'over' && !restartRequested) {
-      restartRequested = true;
-      // v0.9.6: chờ cố định (mặc định 10s) ở màn tổng kết rồi mới chơi ván mới
-      const waitMs = clamp(Number(state.restartDelay) || 10, 3, 60) * 1000;
-      setTimeout(() => { if (state.autoRestart && W.__PL?.Game?.state === 'over') safe(() => W.__PL.Game.startRun(), null); }, waitMs);
-    } else if (P.Game.state !== 'over') restartRequested = false;
   }, 250);
 
   // GIỮ NGUYÊN bộ nạp game gốc bằng fetch & rewrite app.min.js (BỌC TRY-CATCH AN TOÀN TRÊN SAFARI)
