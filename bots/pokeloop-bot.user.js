@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLoop Bot Full
 // @namespace    local.pokeloop.bot.full
-// @version      0.9.30
+// @version      0.9.31
 // @description  Bản đầy đủ cho PokéLoop (pokeloop.online): như PokeLit Bot (báo cáo ván, học từ bạn…). Khai đúng cờ 'auto' với game. Chỉ bật một bot tại một thời điểm.
 // @match        https://pokeloop.online/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.30 Loop Full';
+  const VERSION = '0.9.31 Loop Full';
   const TAG = '[PokeLoop Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -165,7 +165,7 @@
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const safe = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
 
-  // v0.9.30: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
+  // v0.9.31: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
   const bgNotes = (() => { try { return JSON.parse(localStorage.getItem('plh_bgnotes') || '[]').slice(-60); } catch (_) { return []; } })();
   function bgNote(m) {
     try { console.info(`${TAG} ${m}`); bgNotes.push({ at: Date.now(), m: String(m).slice(0, 300) }); if (bgNotes.length > 60) bgNotes.splice(0, bgNotes.length - 60); localStorage.setItem('plh_bgnotes', JSON.stringify(bgNotes)); } catch (_) {}
@@ -1213,13 +1213,13 @@
   const badKey = (x, y) => Math.round(x / 64) + ',' + Math.round(y / 64);
   function isBad(x, y, now) { if (!badCells.size) return false; const e = badCells.get(badKey(x, y)); return !!e && e > now; }
   function markBad(x, y, now) { for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) badCells.set(badKey(x + dx * 64, y + dy * 64), now + 45000); if (badCells.size > 400) for (const [k, e] of badCells) if (e < now) badCells.delete(k); }
-  const huntFails = new Map();
+  const huntFails = new Map(), huntAbandon = new Map();
   // trả về true nếu hòm bị bỏ tạm (sau 3 lần lỗi); lần đầu/hai chỉ đánh dấu chỗ kẹt rồi dò đường lại
   function huntFail(me, key, now) {
     key = String(key).split('#')[0]; markBad(me.x, me.y, now); coarse.at = 0; pathCache.at = 0;
     const n = (huntFails.get(key) || 0) + 1; huntFails.set(key, n);
     W.__PLH_RUN_LOG?.recordChestEv?.(n >= 3 ? 'bỏ hòm (thất bại 3 lần)' : 'thử lại hòm (kẹt/hết giờ/không tới được)');
-    if (n >= 3) { huntFails.delete(key); propBlacklist.set(key, now + 8000); return true; }   // v0.9.22: 20s → 8s để quay lại mở sớm
+    if (n >= 3) { huntFails.delete(key); const tot = (huntAbandon.get(key) || 0) + 1; huntAbandon.set(key, tot); propBlacklist.set(key, now + Math.min(300000, 8000 * Math.pow(2, tot - 1))); return true; }   // v0.9.31: hòm kẹt lặp lại → cấm lâu dần (8s→5 phút)   // v0.9.22: 20s → 8s để quay lại mở sớm
     return false;
   }
   const routeCache = new Map();
@@ -1375,10 +1375,10 @@
     hunt.exTarget = best; hunt.exUntil = now + 9000; hunt.exSeq++;
     return { x: best.x, y: best.y, weight: 1.0, mode: 'tìm hòm', key: 'explore:' + hunt.exSeq, limMs: 12000 };
   }
-  // v0.9.30: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
+  // v0.9.31: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
   // Dùng Events._dbg() = {x,y (Pokémon lạc), tx,ty (điểm đích), state, hp, t}: tới gần Pokémon (nó tự bám theo) rồi dẫn tới đích.
   let lostLast = '', lostPrevId = '', lostLastDbg = '';
-  function lostMonGoal(me) {
+  function lostMonGoal(me, ctx) {
     const P = W.__PL; if (!P || !P.Events) return null;
     const id = safe(() => P.Events.current, null);
     const idStr = id ? (typeof id === 'string' ? id : safe(() => JSON.stringify(id).slice(0, 80), '?')) : '';
@@ -1393,6 +1393,7 @@
     const d = safe(() => P.Events._dbg && P.Events._dbg(), null);
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null;
     if (/done|end|over|fail|success|complete/i.test(String(d.state || ''))) return null;
+    if (ctx && (ctx.inArena || (ctx.titan && !ctx.titan.portal))) return null;   // v0.9.31: đang trong arena/Titan → tọa độ thế giới chính vô nghĩa
     const hasT = Number.isFinite(d.tx) && Number.isFinite(d.ty);
     const dm = dist(me, { x: d.x, y: d.y });
     const follow = 70;                       // game: bán kính bám theo ≈ r+r+18
@@ -1493,7 +1494,7 @@
     // THỨ TỰ 3: Sự kiện (Meowth / Giải cứu)
     const rescue = eventObj && (eventObj.target || eventObj.rescue || eventObj.x != null || eventObj.position) ? (eventObj.target || eventObj.rescue || eventObj.position || eventObj) : null;
     const rescueGoal = rescue ? xyPoint(rescue) : null;
-    const lostGoal = state.events ? lostMonGoal(me) : null;
+    const lostGoal = state.events ? lostMonGoal(me, ctx) : null;
     const eventGoal = activeChase && state.events && hp >= .35 ? (() => {
       const d = dist(me, activeChase), speed = Math.max(1, me.baseSpd || me.spd || 90), lead = Math.min(1.2, d / speed);
       return { x: activeChase.x + (activeChase.__vx || 0) * lead, y: activeChase.y + (activeChase.__vy || 0) * lead, key: `meowth:${activeChase.id}:${Math.round(now/100)}` };
@@ -1877,6 +1878,14 @@
         if (ctx.inArena || (ctx.titan && !ctx.titan.portal)) { if (!us.inFightPrev) { goalState = { key: '', goal: null, mode: '', since: now, reason: 'vào arena → bỏ mục tiêu cũ' }; us.gc = { key: '', d: null, at: now, fails: 0 }; stickyRift = null; forcedGoal = null; } us.inFightPrev = true; } else us.inFightPrev = false;
         if (ctx.inArena) us.wasArena = true;
         else if (us.wasArena) { us.wasArena = false; for (const k of [...propBlacklist.keys()]) if (String(k).startsWith('sp:') && !chestTrack.get(k)?.counted) propBlacklist.delete(k); huntFails.clear(); }
+        // v0.9.31: GIẢI CỨU POKÉMON LẠC — bắt buộc (dưới rift/Titan, trên mở hòm), chỉ khi còn kịp và máu ổn
+        if (!forcedGoal && state.events && !ctx.inArena && !(ctx.titan && !ctx.titan.portal) && me.hp / Math.max(1, me.maxHp) >= .3) {
+          const lg = lostMonGoal(me, ctx);
+          if (lg) {
+            const spd = Math.max(1, me.baseSpd || me.spd || 90), dl = dist(me, lg);
+            if (dl / spd < 95) { const g2 = { x: lg.x, y: lg.y, weight: 3, mode: 'giải cứu Pokémon lạc', key: lg.key, force: true }; setGoal(g2, lg.reason); forcedGoal = g2; }
+          }
+        }
         // v0.9.11: MỞ HÒM BẤT CHẤP — có hòm (hoặc đang tìm hòm) thì đi thẳng tới mở, bỏ qua né quái / né đòn / né vùng, bất kể máu (v0.9.13: nhường cho rift)
         if (!forcedGoal && state.chestForce && state.chest && !ctx.inArena && worldKey === '0') {
           const hg = chestHuntGoal(ctx, now);
@@ -3365,7 +3374,7 @@
   }
 
   let uiTick = 0;
-  // v0.9.30: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // v0.9.31: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
   // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
   const RS_KEY = 'plh_restart_pending';
   const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '' };
