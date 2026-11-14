@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.24
+// @version      0.9.25
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.24';
+  const VERSION = '0.9.25';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -2917,6 +2917,15 @@
 #plh-panel .plh-hist-item span{flex:1;min-width:0}
 #plh-panel .plh-hist-item small{display:block;color:var(--mut);font-size:10px}
 #plh-panel .plh-hist-item button{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:8px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer}
+/* v0.9.25: giao diện kính mờ + thanh Độ đậm (tự đổi nền ô / bóng chữ khi trong suốt) */
+#plh-panel{text-shadow:var(--tsh,none)}
+#plh-panel .plh-row,#plh-panel summary{background:var(--chip,transparent);border-radius:8px}
+#plh-panel .plh-row{padding:6px 8px;margin-top:4px;border-top:0}
+#plh-panel .plh-card{background:var(--chip,var(--card))}
+#plh-panel details{background:transparent}
+#plh-panel .plh-alpharow{display:flex;align-items:center;gap:8px;font-size:12px}
+#plh-panel .plh-alpharow input[type=range]{flex:1;width:auto}
+#plh-panel #plh-alphatxt{min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
 `;
   const ICON_POWER = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M6.4 6.9a8 8 0 1 0 11.2 0"/></svg>';
   const ICON_PANEL = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="5"/><path d="M8.5 9.5h7M8.5 12.5h7M8.5 15.5h4"/></svg>';
@@ -2968,6 +2977,7 @@
           <div id="plh-status">Đang khởi tạo…</div>
           <div id="plh-perf" class="plh-perf"></div>
         </div>
+        <div class="plh-card"><div class="plh-alpharow"><span>🎚 Độ đậm</span><input type="range" id="plh-alpha" min="15" max="95" step="1" title="Kéo sang phải: nền đậm, dễ đọc · sang trái: trong suốt, nhìn thấy game"><span id="plh-alphatxt"></span></div></div>
         <div id="plh-controls"></div>
         <div class="plh-foot">${isIOS ? 'Giữ màn hình sáng khi chơi' : 'F8 bật/tắt bot · F9 ẩn/hiện bảng · kéo 2 nút để di chuyển'}</div>
       </div>`;
@@ -2978,6 +2988,21 @@
     master.addEventListener('change', () => { state.enabled = master.checked; persistSettings(); syncEnabledUI(); });
 
     buildDock(el);
+
+    // v0.9.25: thanh Độ đậm — càng trong suốt thì từng ô chức năng tự có nền tối riêng + chữ có viền bóng để vẫn dễ đọc
+    {
+      const al = el.querySelector('#plh-alpha'), alt = el.querySelector('#plh-alphatxt');
+      let v = 70; try { const x = parseInt(localStorage.getItem('plh_panel_alpha'), 10); if (x >= 15 && x <= 95) v = x; } catch (_) {}
+      const apply = pct => {
+        const a = pct / 100, k = Math.max(0, Math.min(1, (0.55 - a) / 0.4)), st = el.style;
+        st.setProperty('--bg', `rgba(${a >= 0.5 ? '15,23,42' : '255,255,255'},${a})`);
+        if (a < 0.5) { st.setProperty('--chip', `rgba(15,23,42,${((0.22 + 0.38 * k) * 0.7).toFixed(3)})`); st.setProperty('--mut', `rgba(255,255,255,${(0.85 + 0.15 * k).toFixed(2)})`); st.setProperty('--tsh', `0 0 3px rgba(0,0,0,${(0.25 + 0.6 * k).toFixed(2)}),0 1px 2px rgba(0,0,0,${(0.3 + 0.6 * k).toFixed(2)})`); }
+        else { st.removeProperty('--chip'); st.removeProperty('--mut'); st.removeProperty('--tsh'); }
+        if (alt) alt.textContent = pct + '%';
+      };
+      al.value = String(v); apply(v);
+      al.addEventListener('input', () => { const p = parseInt(al.value, 10) || 70; apply(p); try { localStorage.setItem('plh_panel_alpha', String(p)); } catch (_) {} });
+    }
 
     try {
       const pos = JSON.parse(localStorage.getItem('plh_panel_pos') || 'null');
