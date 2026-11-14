@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot Lite
 // @namespace    local.pokelit.bot.lite
-// @version      0.9.23
+// @version      0.9.24
 // @description  Bản rút gọn: bot chơi + mở hòm, không báo cáo. Chỉ bật một trong hai bản (Bot hoặc Bot Lite).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.23 Lite';
+  const VERSION = '0.9.24 Lite';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -576,7 +576,7 @@
   const SHOP_ORDER = ['lifeorb', 'choiceband', 'choicescarf', 'quickclaw', 'leftovers', 'shellbell', 'assaultvest', 'focussash', 'kingsrock', 'rockyhelmet', 'airballoon', 'amuletcoin', 'luckyegg'];
   const SHOP_NAME = { lifeorb: 'Life Orb', choiceband: 'Choice Band', choicescarf: 'Choice Scarf', quickclaw: 'Quick Claw', leftovers: 'Leftovers', shellbell: 'Shell Bell', assaultvest: 'Assault Vest', focussash: 'Focus Sash', kingsrock: "King's Rock", rockyhelmet: 'Rocky Helmet', airballoon: 'Air Balloon', amuletcoin: 'Amulet Coin', luckyegg: 'Lucky Egg' };
   const SHOP_PRICE = { leftovers: 12000, choiceband: 16000, quickclaw: 16000, focussash: 14000, shellbell: 12000, amuletcoin: 18000, luckyegg: 10000, lifeorb: 16000, choicescarf: 14000, rockyhelmet: 10000, assaultvest: 14000, kingsrock: 14000, airballoon: 12000 };
-  const shopActed = new WeakSet();
+  const shopActed = new WeakSet(), shopSt = { st: null, n: 0, at: 0, since: 0, bought: false };
   function shopPlan(P) {
     try {
       const sh = P.Shop, st = sh && sh.stand; if (!state.shopBuy || !st || st.gone || st.bought || !Array.isArray(st.items)) return null;
@@ -589,21 +589,24 @@
   // Chạy trong vòng lặp 250ms (game tạm dừng khi cửa hàng mở nên không thể đặt trong think): bấm mua món ưu tiên hoặc bấm Rời đi.
   function shopTick(P) {
     try {
-      if (!state.shopBuy || !state.enabled) return;
-      if (!(P.UI && P.UI.isOpen && P.UI.isOpen('scr-shop'))) return;
-      const st = P.Shop && P.Shop.stand; if (!st) return;
-      if (shopActed.has(st)) return; shopActed.add(st);
-      const plan = shopPlan(P);
-      const cards = document.querySelectorAll('#shop-cards .card');
-      if (plan && cards[plan.idx] && !cards[plan.idx].classList.contains('off')) {
+      if (!state.enabled) return;
+      if (!(P.UI && P.UI.isOpen && P.UI.isOpen('scr-shop'))) { shopSt.n = 0; shopSt.st = null; return; }
+      const st = P.Shop && P.Shop.stand, now = Date.now();
+      if (shopSt.st !== st) { shopSt.st = st; shopSt.n = 0; shopSt.at = 0; shopSt.since = now; shopSt.bought = false; }
+      if (now - shopSt.at < 700) return;   // v0.9.24: thử lại mỗi 0.7s cho tới khi cửa hàng thật sự đóng
+      const cards = document.querySelectorAll('#shop-cards .card'), lv = document.getElementById('shop-leave');
+      if (!cards.length && !lv && now - shopSt.since < 1500) return;
+      shopSt.at = now; shopSt.n++;
+      const plan = state.shopBuy && !shopSt.bought ? shopPlan(P) : null;
+      if (plan && cards[plan.idx] && !cards[plan.idx].classList.contains('off') && shopSt.n <= 2) {
         console.info(`${TAG} Kecleon: mua ${SHOP_NAME[plan.pick] || plan.pick} (${plan.price})`);
-        cards[plan.idx].click();
+        shopSt.bought = true; cards[plan.idx].click();
         if (W.__PLH_RUN_LOG?.recordShop) W.__PLH_RUN_LOG.recordShop('mua ' + (SHOP_NAME[plan.pick] || plan.pick));
-      } else {
-        console.info(`${TAG} Kecleon: không có món ưu tiên (hoặc không đủ xu) → rời đi`);
-        const lv = document.getElementById('shop-leave'); if (lv) lv.click();
-        if (W.__PLH_RUN_LOG?.recordShop) W.__PLH_RUN_LOG.recordShop('rời đi, không mua');
+        return;
       }
+      if (shopSt.n === 1 || shopSt.n % 4 === 0) { console.info(`${TAG} Kecleon: rời đi (lần ${shopSt.n})`); if (W.__PLH_RUN_LOG?.recordShop) W.__PLH_RUN_LOG.recordShop(`rời đi (lần thử ${shopSt.n}${state.shopBuy ? '' : ', tắt mua'})`); }
+      if (lv) lv.click();
+      if (shopSt.n >= 3 && P.RunUI && typeof P.RunUI.closeShop === 'function') P.RunUI.closeShop();
     } catch (e) { console.warn(`${TAG} lỗi cửa hàng`, e); }
   }
 
@@ -748,8 +751,8 @@
         const c = t.clones.sort((a, b) => dist(me, a) - dist(me, b))[0], d = dist(me, c) || 1;
         tgt = { x: c.x - (c.x - me.x) / d * 120, y: c.y - (c.y - me.y) / d * 120, key: 'titan:clone' }; why = 'diệt bản sao Titan (mỗi con làm Titan mất 5% máu)';
       } else if (t.boss) {
-        const R = t.immune ? 380 : (t.enrage ? 300 : 240);
-        const a = Math.atan2(me.y - t.boss.y, me.x - t.boss.x) + 0.5;
+        const bR = Number(t.boss.r) || 40, R = t.immune ? 380 : (t.enrage ? 300 : (t.phase >= 3 ? Math.max(120, bR + 70) : Math.max(140, bR + 90)));   // v0.9.24: áp sát boss (trước 240) để luôn gây sát thương, cả 3 pha
+        const a = Math.atan2(me.y - t.boss.y, me.x - t.boss.x) + 0.35;
         let x = t.boss.x + Math.cos(a) * R, y = t.boss.y + Math.sin(a) * R;
         if (t.R > 0) { const cd = Math.hypot(x - t.cx, y - t.cy), lim = t.R * 0.85; if (cd > lim) { x = t.cx + (x - t.cx) / cd * lim; y = t.cy + (y - t.cy) / cd * lim; } }
         tgt = { x, y, key: 'titan:orbit:' + Math.round(a * 4) }; why = t.immune ? 'Titan miễn nhiễm: giữ xa' : 'thả diều quanh Titan';
@@ -1836,6 +1839,7 @@
           ctx.riftRush = riftRush;
         }
         // v0.9.13: vừa xong rift (ra khỏi arena) → mở lại các hòm đang bị cấm tạm / bỏ dở (trừ hòm đã mở xong)
+        if (ctx.inArena || (ctx.titan && !ctx.titan.portal)) { if (!us.inFightPrev) { goalState = { key: '', goal: null, mode: '', since: now, reason: 'vào arena → bỏ mục tiêu cũ' }; us.gc = { key: '', d: null, at: now, fails: 0 }; stickyRift = null; forcedGoal = null; } us.inFightPrev = true; } else us.inFightPrev = false;
         if (ctx.inArena) us.wasArena = true;
         else if (us.wasArena) { us.wasArena = false; for (const k of [...propBlacklist.keys()]) if (String(k).startsWith('sp:') && !chestTrack.get(k)?.counted) propBlacklist.delete(k); huntFails.clear(); }
         // v0.9.11: MỞ HÒM BẤT CHẤP — có hòm (hoặc đang tìm hòm) thì đi thẳng tới mở, bỏ qua né quái / né đòn / né vùng, bất kể máu (v0.9.13: nhường cho rift)
