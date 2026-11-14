@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot Lite
 // @namespace    local.pokelit.bot.lite
-// @version      0.9.25
+// @version      0.9.26
 // @description  Bản rút gọn: bot chơi + mở hòm, không báo cáo. Chỉ bật một trong hai bản (Bot hoặc Bot Lite).
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.25 Lite';
+  const VERSION = '0.9.26 Lite';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -2982,7 +2982,7 @@
         </div>
         <div class="plh-card"><div class="plh-alpharow"><span>🎚 Độ đậm</span><input type="range" id="plh-alpha" min="15" max="95" step="1" title="Kéo sang phải: nền đậm, dễ đọc · sang trái: trong suốt, nhìn thấy game"><span id="plh-alphatxt"></span></div></div>
         <div id="plh-controls"></div>
-        <div class="plh-foot">${isIOS ? 'Giữ màn hình sáng khi chơi' : 'F8 bật/tắt bot · F9 ẩn/hiện bảng · kéo 2 nút để di chuyển'}</div>
+        <div class="plh-foot">${isIOS ? 'Giữ màn hình sáng khi chơi' : 'Kéo 2 nút bên phải để di chuyển'}</div>
       </div>`;
     document.documentElement.appendChild(el);
 
@@ -3262,13 +3262,6 @@
       if (box) { box.textContent = message; box.style.color = isError ? '#ff5b5b' : '#fff'; box.style.borderColor = isError ? '#ff3333' : '#65708a'; }
     } catch (_) {}
   }
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'F8') {
-      state.enabled = !state.enabled; persistSettings(); syncEnabledUI();
-    }
-    if (e.key === 'F9') setPanelHidden(!panelPrefs.hidden);
-  });
 
   // v0.9.10: Chọn item cầm tay. Màn "An item!" (chỉ cầm được 1 món): đổi/giữ/khóa theo danh sách tick (thứ tự trên → dưới = ưu tiên).
   let itemSeenAt = 0, itemActAt = 0;
