@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PokeLit Bot
 // @namespace    local.pokelit.helper
-// @version      0.9.29
+// @version      0.9.30
 // @description  Điều khiển di chuyển và chọn thẻ bằng API đầu vào của game PokéLit.
 // @match        https://pokelit.0d4y.cc/*
 // @run-at       document-start
@@ -20,7 +20,7 @@
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || W.matchMedia('(pointer:coarse)').matches;
 
-  const VERSION = '0.9.29';
+  const VERSION = '0.9.30';
   const TAG = '[PokeLit Bot]';
   const DEFAULTS = {
     enabled: true,
@@ -164,6 +164,12 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const safe = (fn, fallback) => { try { return fn(); } catch (_) { return fallback; } };
+
+  // v0.9.30: ghi chú tự động (tự chơi lại, sự kiện lạ, Pokémon lạc) — lưu bền qua reload, in vào báo cáo trận để không cần theo dõi.
+  const bgNotes = (() => { try { return JSON.parse(localStorage.getItem('plh_bgnotes') || '[]').slice(-60); } catch (_) { return []; } })();
+  function bgNote(m) {
+    try { console.info(`${TAG} ${m}`); bgNotes.push({ at: Date.now(), m: String(m).slice(0, 300) }); if (bgNotes.length > 60) bgNotes.splice(0, bgNotes.length - 60); localStorage.setItem('plh_bgnotes', JSON.stringify(bgNotes)); } catch (_) {}
+  }
 
   panelPrefs.min = false;
   panelPrefs.hidden = safe(() => { const v = localStorage.getItem('plh_panel_hidden'); return v === null ? isIOS : v === '1'; }, isIOS);
@@ -1369,12 +1375,20 @@
     hunt.exTarget = best; hunt.exUntil = now + 9000; hunt.exSeq++;
     return { x: best.x, y: best.y, weight: 1.0, mode: 'tìm hòm', key: 'explore:' + hunt.exSeq, limMs: 12000 };
   }
-  // v0.9.29: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
+  // v0.9.30: sự kiện "giải cứu Pokémon lạc" — Events.current là chuỗi id nên các nhánh đọc object không bắt được.
   // Dùng Events._dbg() = {x,y (Pokémon lạc), tx,ty (điểm đích), state, hp, t}: tới gần Pokémon (nó tự bám theo) rồi dẫn tới đích.
-  let lostLast = '';
+  let lostLast = '', lostPrevId = '', lostLastDbg = '';
   function lostMonGoal(me) {
     const P = W.__PL; if (!P || !P.Events) return null;
     const id = safe(() => P.Events.current, null);
+    const idStr = id ? (typeof id === 'string' ? id : safe(() => JSON.stringify(id).slice(0, 80), '?')) : '';
+    if (idStr !== lostPrevId) {
+      const snap = safe(() => P.Events._dbg && JSON.stringify(P.Events._dbg()), '');
+      if (idStr) bgNote(`Sự kiện mới: ${idStr}${snap ? ' · ' + snap : ''}`);
+      else bgNote(`Sự kiện kết thúc: ${lostPrevId} · dbg cuối ${lostLastDbg || '?'}`);
+      lostPrevId = idStr;
+    }
+    if (id) lostLastDbg = safe(() => P.Events._dbg && JSON.stringify(P.Events._dbg()), lostLastDbg);
     if (!id || typeof id !== 'string' || !/lost|stray|rescue|lac|lạc|astray/i.test(id)) return null;
     const d = safe(() => P.Events._dbg && P.Events._dbg(), null);
     if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null;
@@ -1386,7 +1400,7 @@
     if (dm > follow && !(hasT && dm < 110)) { g = { x: d.x, y: d.y, key: 'lost:pickup' }; why = `đi tới Pokémon lạc (${Math.round(dm)}px)`; }
     else if (hasT) { g = { x: d.tx, y: d.ty, key: 'lost:deliver' }; why = `dẫn Pokémon tới đích (${Math.round(dist(me, { x: d.tx, y: d.ty }))}px)`; }
     else { g = { x: d.x, y: d.y, key: 'lost:pickup' }; why = 'ở cạnh Pokémon lạc'; }
-    if (lostLast !== g.key) { lostLast = g.key; console.info(`${TAG} Giải cứu Pokémon lạc: ${why} · state=${d.state} hp=${d.hp} t=${d.t}`); }
+    if (lostLast !== g.key) { lostLast = g.key; bgNote(`Giải cứu Pokémon lạc: ${why} · state=${d.state} hp=${d.hp} t=${d.t}`); }
     g.reason = why;
     return g;
   }
@@ -2482,6 +2496,7 @@
         ...(r.coop ? [`CO-OP: ${r.coop.host ? 'chủ phòng' : 'khách'}; đồng đội tối đa ${r.coop.maxMates}; lần đi hồi sinh ${r.coop.reviveGoals || 0}; lần bám đồng đội ${r.coop.followGoals || 0}; lần đứng giữ cạnh xác ${r.coop.holds || 0}; đồng đội được hồi sinh ${r.coop.revived || 0}; (không ghi dữ liệu học trong co-op)`] : []),
         ...rewardText(r),
         `Vé hiện có: ×1 ${safe(() => W.__PL.DB.save.tickets.t1, '?')}, ×10 ${safe(() => W.__PL.DB.save.tickets.t10, '?')} (lúc bắt đầu trận: ×1 ${r.ticketStart?.t1 ?? '?'}, ×10 ${r.ticketStart?.t10 ?? '?'})`,
+        ...(bgNotes.length ? ['GHI CHÚ TỰ ĐỘNG (sự kiện / tự chơi lại, 40 dòng gần nhất)', ...bgNotes.slice(-40).map(x => `${new Date(x.at).toLocaleTimeString('vi-VN')} ${x.m}`)] : []),
         ...(r.shop?.length ? ['KECLEON: ' + r.shop.map(x => `${fmt(x.t)} ${x.what}`).join(' | ')] : []),
         ...(r.titan?.length ? ['TITAN (giây | sự kiện | chi tiết)', ...r.titan.map(x => `${fmt(x.t)} | ${x.e} | ${x.e === 'nova' ? (x.safe ? (x.inside ? 'có vòng an toàn: ĐỨNG TRONG vòng lúc nổ' : 'có vòng an toàn: ĐỨNG NGOÀI vòng lúc nổ') : 'KHÔNG có vòng an toàn') + `, HP ${x.hp}%` : x.e === 'phase' ? `pha ${x.ph}, Titan còn ${x.bh}% máu` : `pha ${x.ph}, Titan còn ${x.bh}% máu, HP bạn ${x.hp}%`}`)] : []),
         ...(r.chestEv && Object.keys(r.chestEv).length ? ['KẾT QUẢ ĐI TỚI HÒM: ' + JSON.stringify(r.chestEv)] : []),
@@ -3350,14 +3365,14 @@
   }
 
   let uiTick = 0;
-  // v0.9.29: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
+  // v0.9.30: tự chơi lại theo đúng luồng UI của game (btn-again → Chơi → chọn vùng), tôn trọng Updater của game,
   // thử lại nhiều lần, và tiếp tục sau khi trang tự tải lại để cập nhật.
   const RS_KEY = 'plh_restart_pending';
   const rs = { on: false, t0: 0, next: 0, n: 0, lastLog: '' };
   function restartTick(P) {
     if (!state.autoRestart) { rs.on = false; return; }
     const G = P.Game, st = G && G.state, now = Date.now();
-    if (st === 'playing') { if (rs.on) { console.info(`${TAG} Tự chơi lại: đã vào ván mới (${rs.n} bước)`); } rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
+    if (st === 'playing') { if (rs.on) { bgNote(`Tự chơi lại: đã vào ván mới (${rs.n} bước)`); } rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
     if (!rs.on) {
       let pend = 0; safe(() => { pend = Number(sessionStorage.getItem(RS_KEY)) || 0; }, null);
       const fresh = pend && now - pend < 600000;
@@ -3366,12 +3381,12 @@
         const waitMs = st === 'over' ? clamp(Number(state.restartDelay) || 10, 3, 60) * 1000 : 1500;
         rs.next = now + waitMs;
         safe(() => sessionStorage.setItem(RS_KEY, String(fresh && pend ? pend : now)), null);
-        console.info(`${TAG} Tự chơi lại: chờ ${Math.round(waitMs / 1000)}s (trạng thái ${st})`);
+        bgNote(`Tự chơi lại: chờ ${Math.round(waitMs / 1000)}s (trạng thái ${st})`);
       } else return;
     }
     if (now < rs.next) return;
-    if (now - rs.t0 > 240000) { console.info(`${TAG} Tự chơi lại: bỏ cuộc sau 4 phút`); rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
-    const say = (m) => { if (m !== rs.lastLog) { rs.lastLog = m; console.info(`${TAG} Tự chơi lại: ${m}`); } };
+    if (now - rs.t0 > 240000) { bgNote(`Tự chơi lại: bỏ cuộc sau 4 phút`); rs.on = false; safe(() => sessionStorage.removeItem(RS_KEY), null); return; }
+    const say = (m) => { if (m !== rs.lastLog) { rs.lastLog = m; bgNote(`Tự chơi lại: ${m}`); } };
     const U = P.Updater;
     if (U && U.blocking) { say('game đang cập nhật/lưu, chờ'); rs.next = now + 1000; return; }
     const vis = (el) => el && el.offsetParent !== null && !el.disabled;
